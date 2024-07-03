@@ -279,6 +279,16 @@ XDRStruct!(
     fattr3, ftype, mode, nlink, uid, gid, size, used, rdev, fsid, fileid, atime, mtime, ctime
 );
 
+// section 3.3.4 Procedure 4 ACCESS - Check Access Permission
+// The following constants are used in ACCESS for use within a permission bitmask.
+pub const ACCESS3_READ: u32 = 0x0001;
+pub const ACCESS3_LOOKUP: u32 = 0x0002;
+pub const ACCESS3_MODIFY: u32 = 0x0004;
+pub const ACCESS3_EXTEND: u32 = 0x0008;
+pub const ACCESS3_DELETE: u32 = 0x0010;
+pub const ACCESS3_EXECUTE: u32 = 0x0020;
+
+
 // Section 3.3.19. Procedure 19: FSINFO - Get static file system Information
 // The following constants are used in fsinfo to construct the bitmask 'properties',
 // which represents the file system properties.

@@ -76,9 +76,9 @@ pub enum auth_stat {
     AUTH_BADCRED = 1,
     /// client must begin new session
     AUTH_REJECTEDCRED = 2,
-    /// bad verifier (seal broken)    
+    /// bad verifier (seal broken)
     AUTH_BADVERF = 3,
-    /// verifier expired or replayed  
+    /// verifier expired or replayed
     AUTH_REJECTEDVERF = 4,
     /// rejected for security reasons
     AUTH_TOOWEAK = 5,
@@ -100,11 +100,11 @@ XDREnumSerde!(auth_flavor);
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
 pub struct auth_unix {
-    stamp: u32,
-    machinename: Vec<u8>,
-    uid: u32,
-    gid: u32,
-    gids: Vec<u32>,
+    pub stamp: u32,
+    pub machinename: Vec<u8>,
+    pub uid: u32,
+    pub gid: u32,
+    pub gids: Vec<u32>,
 }
 XDRStruct!(auth_unix, stamp, machinename, uid, gid, gids);
 

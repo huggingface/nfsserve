@@ -1,6 +1,8 @@
 use crate::context::RPCContext;
 use crate::rpcwire::*;
 use crate::vfs::NFSFileSystem;
+use crate::vfsext::NFSFileSystemExtended;
+use crate::vfsextimpl::DefaultNFSFileSystemExtended;
 use anyhow;
 use async_trait::async_trait;
 use std::net::SocketAddr;
@@ -12,7 +14,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 
 /// A NFS Tcp Connection Handler
-pub struct NFSTcpListener<T: NFSFileSystem + Send + Sync + 'static> {
+pub struct NFSTcpListener<T: NFSFileSystemExtended + Send + Sync + 'static> {
     listener: TcpListener,
     port: u16,
     arcfs: Arc<T>,
@@ -101,11 +103,21 @@ pub trait NFSTcp: Send + Sync {
     async fn handle_forever(&self) -> io::Result<()>;
 }
 
-impl<T: NFSFileSystem + Send + Sync + 'static> NFSTcpListener<T> {
+impl NFSTcpListener<DefaultNFSFileSystemExtended> {
+
+    pub async fn bind<A: NFSFileSystem + Send + Sync + 'static>(ipstr: &str, fs: A) -> io::Result<Self> {
+        let arcfs: Arc<A> = Arc::new(fs);
+        let data = DefaultNFSFileSystemExtended{ vfs: arcfs.clone() };
+        NFSTcpListener::bind_extended(ipstr, data).await
+    }
+}
+
+impl<T: NFSFileSystemExtended + Send + Sync + 'static> NFSTcpListener<T> {
     /// Binds to a ipstr of the form [ip address]:port. For instance
     /// "127.0.0.1:12000". fs is an instance of an implementation
     /// of NFSFileSystem.
-    pub async fn bind(ipstr: &str, fs: T) -> io::Result<NFSTcpListener<T>> {
+
+    pub async fn bind_extended(ipstr: &str, fs: T) -> io::Result<NFSTcpListener<T>> {
         let (ip, port) = ipstr.split_once(':').ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::AddrNotAvailable,
@@ -169,7 +181,7 @@ impl<T: NFSFileSystem + Send + Sync + 'static> NFSTcpListener<T> {
 }
 
 #[async_trait]
-impl<T: NFSFileSystem + Send + Sync + 'static> NFSTcp for NFSTcpListener<T> {
+impl<T: NFSFileSystemExtended + Send + Sync + 'static> NFSTcp for NFSTcpListener<T> {
     /// Gets the true listening port. Useful if the bound port number is 0
     fn get_listen_port(&self) -> u16 {
         let addr = self.listener.local_addr().unwrap();

@@ -20,3 +20,5 @@ pub mod fs_util;
 
 pub mod tcp;
 pub mod vfs;
+pub mod vfsext;
+pub mod vfsextimpl;
