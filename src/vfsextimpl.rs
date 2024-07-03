@@ -30,7 +30,8 @@ impl NFSFileSystemExtended for DefaultNFSFileSystemExtended {
     /// and this should return the id of the file "dir/a.txt"
     ///
     /// This method should be fast as it is used very frequently.
-    async fn lookup(&self, dirid: fileid3, filename: &filename3, _user_ctx : &UserContext, dir_attr : &mut post_op_attr, obj_attr : &mut post_op_attr) -> Result<fileid3, nfsstat3> {
+    async fn lookup(&self, dirid: fileid3, filename: &filename3, _user_ctx : &UserContext,
+        dir_attr : &mut post_op_attr, obj_attr : &mut post_op_attr) -> Result<fileid3, nfsstat3> {
 
         *dir_attr = match self.vfs.getattr(dirid).await {
             Ok(v) => post_op_attr::attributes(v),
