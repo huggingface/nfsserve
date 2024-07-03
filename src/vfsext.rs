@@ -27,20 +27,25 @@ impl From<&auth_unix> for UserContext {
 #[async_trait]
 pub trait NFSFileSystemExtended : Sync {
 
-    /// Returns the set of capabilities supported
+    /// Returns the set of capabilities supported.
     fn capabilities(&self) -> VFSCapabilities;
-    /// Returns the ID the of the root directory "/"
+
+    /// Returns the ID the of the root directory "/".
     fn root_dir(&self) -> fileid3;
-    /// Look up the id of a path in a directory
+
+    /// Look up the ID of a path in a directory.
     ///
     /// i.e. given a directory dir/ containing a file a.txt
     /// this may call lookup(id_of("dir/"), "a.txt")
     /// and this should return the id of the file "dir/a.txt"
+    /// For example, given a directory `dir/` containing a file `a.txt`,
+    /// a call to `lookup(id_of("dir/"), "a.txt")` should return the ID
+    /// of the file `dir/a.txt`.
     ///
     /// This method should be fast as it is used very frequently.
     async fn lookup(&self, dirid: fileid3, filename: &filename3, user_ctx : &UserContext, dir_attr : &mut post_op_attr, obj_attr : &mut post_op_attr) -> Result<fileid3, nfsstat3>;
 
-    /// Returns the attributes of an id.
+    /// Returns the attributes of the entity identified by 'id'.
     /// This method should be fast as it is used very frequently.
     async fn getattr(&self, id: fileid3, user_ctx : &UserContext) -> Result<fattr3, nfsstat3>;
 

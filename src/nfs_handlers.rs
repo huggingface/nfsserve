@@ -203,9 +203,9 @@ pub async fn nfsproc3_getattr(
 ) -> Result<(), anyhow::Error> {
     let mut handle = nfs::nfs_fh3::default();
     handle.deserialize(input)?;
-    debug!("nfsproc3_getattr({:?},{:?}) ", xid, handle);
+    debug!("nfsproc3_getattr({:?},{:?},{:?}) ", xid, handle, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let id = context.vfs.fh_to_id(&handle);
     // fail if unable to convert file handle
     if let Err(stat) = id {
@@ -263,9 +263,9 @@ pub async fn nfsproc3_lookup(
 ) -> Result<(), anyhow::Error> {
     let mut dirops = nfs::diropargs3::default();
     dirops.deserialize(input)?;
-    debug!("nfsproc3_lookup({:?},{:?}) ", xid, dirops);
+    debug!("nfsproc3_lookup({:?},{:?},{:?}) ", xid, dirops, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let dirid = context.vfs.fh_to_id(&dirops.dir);
     // fail if unable to convert file handle
     if let Err(stat) = dirid {
@@ -276,8 +276,8 @@ pub async fn nfsproc3_lookup(
     }
     let dirid = dirid.unwrap();
 
-    let mut dir_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
-    let mut obj_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
+    let mut dir_attr = nfs::post_op_attr::Void;
+    let mut obj_attr = nfs::post_op_attr::Void;
     match context.vfs.lookup(dirid, &dirops.name, &user_ctx, &mut dir_attr, &mut obj_attr).await {
         Ok(fid) => {
             debug!("lookup success {:?} --> {:?}", xid, obj_attr);
@@ -350,9 +350,9 @@ pub async fn nfsproc3_read(
 ) -> Result<(), anyhow::Error> {
     let mut args = READ3args::default();
     args.deserialize(input)?;
-    debug!("nfsproc3_read({:?},{:?}) ", xid, args);
+    debug!("nfsproc3_read({:?},{:?},{:?}) ", xid, args, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let id = context.vfs.fh_to_id(&args.file);
     if let Err(stat) = id {
         make_success_reply(xid).serialize(output)?;
@@ -432,9 +432,9 @@ pub async fn nfsproc3_fsinfo(
 ) -> Result<(), anyhow::Error> {
     let mut handle = nfs::nfs_fh3::default();
     handle.deserialize(input)?;
-    debug!("nfsproc3_fsinfo({:?},{:?}) ", xid, handle);
+    debug!("nfsproc3_fsinfo({:?},{:?},{:?}) ", xid, handle, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let id = context.vfs.fh_to_id(&handle);
     // fail if unable to convert file handle
     if let Err(stat) = id {
@@ -498,9 +498,9 @@ pub async fn nfsproc3_access(
     handle.deserialize(input)?;
     let mut access: u32 = 0;
     access.deserialize(input)?;
-    debug!("nfsproc3_access({:?},{:?},{:?})", xid, handle, access);
+    debug!("nfsproc3_access({:?},{:?},{:?},{:?})", xid, handle, access, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let id = context.vfs.fh_to_id(&handle);
     // fail if unable to convert file handle
     if let Err(_) = id {
@@ -510,7 +510,7 @@ pub async fn nfsproc3_access(
     }
     let id = id.unwrap();
 
-    let mut obj_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
+    let mut obj_attr = nfs::post_op_attr::Void;
     match context.vfs.access(id, access, &user_ctx, &mut obj_attr).await {
         Ok(access) => {
             debug!(" {:?} --> {:?}", xid, access);
@@ -587,9 +587,9 @@ pub async fn nfsproc3_pathconf(
 ) -> Result<(), anyhow::Error> {
     let mut handle = nfs::nfs_fh3::default();
     handle.deserialize(input)?;
-    debug!("nfsproc3_pathconf({:?},{:?})", xid, handle);
+    debug!("nfsproc3_pathconf({:?},{:?},{:?})", xid, handle, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let id = context.vfs.fh_to_id(&handle);
     // fail if unable to convert file handle
     if let Err(stat) = id {
@@ -683,7 +683,7 @@ pub async fn nfsproc3_fsstat(
 ) -> Result<(), anyhow::Error> {
     let mut handle = nfs::nfs_fh3::default();
     handle.deserialize(input)?;
-    debug!("nfsproc3_fsstat({:?},{:?}) ", xid, handle);
+    debug!("nfsproc3_fsstat({:?},{:?},{:?}) ", xid, handle, context);
     let id = context.vfs.fh_to_id(&handle);
     // fail if unable to convert file handle
     if let Err(stat) = id {
@@ -694,7 +694,7 @@ pub async fn nfsproc3_fsstat(
     }
     let id = id.unwrap();
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let obj_attr = match context.vfs.getattr(id, &user_ctx).await {
         Ok(v) => nfs::post_op_attr::attributes(v),
         Err(_) => nfs::post_op_attr::Void,
@@ -805,9 +805,9 @@ pub async fn nfsproc3_readdirplus(
 ) -> Result<(), anyhow::Error> {
     let mut args = READDIRPLUS3args::default();
     args.deserialize(input)?;
-    debug!("nfsproc3_readdirplus({:?},{:?}) ", xid, args);
+    debug!("nfsproc3_readdirplus({:?},{:?},{:?}) ", xid, args, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let dirid = context.vfs.fh_to_id(&args.dir);
     // fail if unable to convert file handle
     if let Err(stat) = dirid {
@@ -998,9 +998,9 @@ pub async fn nfsproc3_readdir(
 ) -> Result<(), anyhow::Error> {
     let mut args = READDIR3args::default();
     args.deserialize(input)?;
-    debug!("nfsproc3_readdirplus({:?},{:?}) ", xid, args);
+    debug!("nfsproc3_readdirplus({:?},{:?},{:?}) ", xid, args, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let dirid = context.vfs.fh_to_id(&args.dir);
     // fail if unable to convert file handle
     if let Err(stat) = dirid {
@@ -1196,14 +1196,14 @@ pub async fn nfsproc3_write(
 
     let mut args = WRITE3args::default();
     args.deserialize(input)?;
-    debug!("nfsproc3_write({:?},...) ", xid);
+    debug!("nfsproc3_write({:?},{:?},...) ", xid, context);
     // sanity check the length
     if args.data.len() != args.count as usize {
         garbage_args_reply_message(xid).serialize(output)?;
         return Ok(());
     }
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx  = UserContext::from(&context.auth);
     let id = context.vfs.fh_to_id(&args.file);
     if let Err(stat) = id {
         make_success_reply(xid).serialize(output)?;
@@ -1213,7 +1213,7 @@ pub async fn nfsproc3_write(
     }
     let id = id.unwrap();
 
-    let mut obj_attr : nfs::pre_op_attr = nfs::pre_op_attr::Void;
+    let mut obj_attr = nfs::pre_op_attr::Void;
     match context.vfs.write(id, args.offset, &args.data, &user_ctx, &mut obj_attr).await {
         Ok(fattr) => {
             debug!("write success {:?} --> {:?}", xid, fattr);
@@ -1310,9 +1310,9 @@ pub async fn nfsproc3_create(
     let mut createhow = createmode3::default();
     createhow.deserialize(input)?;
 
-    debug!("nfsproc3_create({:?}, {:?}, {:?}) ", xid, dirops, createhow);
+    debug!("nfsproc3_create({:?}, {:?}, {:?}, {:?}) ", xid, dirops, createhow, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     // find the directory we are supposed to create the
     // new file in
     let dirid = context.vfs.fh_to_id(&dirops.dir);
@@ -1336,14 +1336,14 @@ pub async fn nfsproc3_create(
         createmode3::GUARDED => {
             target_attributes.deserialize(input)?;
             debug!("create guarded {:?}", target_attributes);
-            let mut dir_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
-            let mut obj_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
+            let mut dir_attr = nfs::post_op_attr::Void;
+            let mut obj_attr = nfs::post_op_attr::Void;
             if context.vfs.lookup(dirid, &dirops.name, &user_ctx, &mut dir_attr, &mut obj_attr).await.is_ok() {
                 // file exists. Fail with NFS3ERR_EXIST.
                 // Re-read dir attributes
                 // for post op attr
-                let mut pre_dir_attr : nfs::pre_op_attr = nfs::pre_op_attr::Void;
-                let mut post_dir_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
+                let mut pre_dir_attr = nfs::pre_op_attr::Void;
+                let mut post_dir_attr = nfs::post_op_attr::Void;
                 match context.vfs.getattr(dirid, &user_ctx).await {
                     Ok(v) => {
                         let wccattr = nfs::wcc_attr {
@@ -1374,8 +1374,8 @@ pub async fn nfsproc3_create(
         }
     }
 
-    let mut pre_dir_attr : nfs::pre_op_attr = nfs::pre_op_attr::Void;
-    let mut post_dir_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
+    let mut pre_dir_attr = nfs::pre_op_attr::Void;
+    let mut post_dir_attr = nfs::post_op_attr::Void;
     let fid: Result<nfs::fileid3, nfs::nfsstat3>;
     let postopattr: nfs::post_op_attr;
     // fill in the fid and post op attr here
@@ -1491,9 +1491,9 @@ pub async fn nfsproc3_setattr(
     }
     let mut args = SETATTR3args::default();
     args.deserialize(input)?;
-    debug!("nfsproc3_setattr({:?},{:?}) ", xid, args);
+    debug!("nfsproc3_setattr({:?}, {:?}, {:?}) ", xid, args, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let id = context.vfs.fh_to_id(&args.object);
     // fail if unable to convert file handle
     if let Err(stat) = id {
@@ -1598,9 +1598,9 @@ pub async fn nfsproc3_remove(
     let mut dirops = nfs::diropargs3::default();
     dirops.deserialize(input)?;
 
-    debug!("nfsproc3_remove({:?}, {:?}) ", xid, dirops);
+    debug!("nfsproc3_remove({:?}, {:?}, {:?}) ", xid, dirops, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     // find the directory with the file
     let dirid = context.vfs.fh_to_id(&dirops.dir);
     if let Err(stat) = dirid {
@@ -1614,8 +1614,8 @@ pub async fn nfsproc3_remove(
     let dirid = dirid.unwrap();
 
     // delete!
-    let mut pre_dir_attr : nfs::pre_op_attr = nfs::pre_op_attr::Void;
-    let mut post_dir_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
+    let mut pre_dir_attr = nfs::pre_op_attr::Void;
+    let mut post_dir_attr = nfs::post_op_attr::Void;
     let res = context.vfs.remove(dirid, &dirops.name, &user_ctx, &mut pre_dir_attr, &mut post_dir_attr).await;
 
     let wcc_res = nfs::wcc_data {
@@ -1688,12 +1688,9 @@ pub async fn nfsproc3_rename(
     fromdirops.deserialize(input)?;
     todirops.deserialize(input)?;
 
-    debug!(
-        "nfsproc3_rename({:?}, {:?}, {:?}) ",
-        xid, fromdirops, todirops
-    );
+    debug!("nfsproc3_rename({:?}, {:?}, {:?}, {:?}) ", xid, fromdirops, todirops, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     // find the from directory
     let from_dirid = context.vfs.fh_to_id(&fromdirops.dir);
     if let Err(stat) = from_dirid {
@@ -1721,10 +1718,10 @@ pub async fn nfsproc3_rename(
     let to_dirid = to_dirid.unwrap();
 
     // rename!
-    let mut pre_from_dir_attr : nfs::pre_op_attr = nfs::pre_op_attr::Void;
-    let mut pre_to_dir_attr : nfs::pre_op_attr = nfs::pre_op_attr::Void;
-    let mut post_from_dir_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
-    let mut post_to_dir_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
+    let mut pre_from_dir_attr = nfs::pre_op_attr::Void;
+    let mut pre_to_dir_attr = nfs::pre_op_attr::Void;
+    let mut post_from_dir_attr = nfs::post_op_attr::Void;
+    let mut post_to_dir_attr = nfs::post_op_attr::Void;
     let res = context
         .vfs
         .rename(from_dirid, &fromdirops.name, to_dirid, &todirops.name, &user_ctx, &mut pre_from_dir_attr, &mut pre_to_dir_attr, &mut post_from_dir_attr, &mut post_to_dir_attr)
@@ -1813,9 +1810,9 @@ pub async fn nfsproc3_mkdir(
     let mut args = MKDIR3args::default();
     args.deserialize(input)?;
 
-    debug!("nfsproc3_mkdir({:?}, {:?}) ", xid, args);
+    debug!("nfsproc3_mkdir({:?}, {:?}, {:?}) ", xid, args, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     // find the directory we are supposed to create the
     // new file in
     let dirid = context.vfs.fh_to_id(&args.dirops.dir);
@@ -1830,8 +1827,8 @@ pub async fn nfsproc3_mkdir(
     // found the directory, get the attributes
     let dirid = dirid.unwrap();
 
-    let mut pre_dir_attr : nfs::pre_op_attr = nfs::pre_op_attr::Void;
-    let mut post_dir_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
+    let mut pre_dir_attr = nfs::pre_op_attr::Void;
+    let mut post_dir_attr = nfs::post_op_attr::Void;
     let res = context.vfs.mkdir(dirid, &args.dirops.name, &user_ctx, &mut pre_dir_attr, &mut post_dir_attr).await;
 
     let wcc_res = nfs::wcc_data {
@@ -1918,9 +1915,9 @@ pub async fn nfsproc3_symlink(
     let mut args = SYMLINK3args::default();
     args.deserialize(input)?;
 
-    debug!("nfsproc3_symlink({:?}, {:?}) ", xid, args);
+    debug!("nfsproc3_symlink({:?}, {:?}, {:?}) ", xid, args, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     // find the directory we are supposed to create the
     // new file in
     let dirid = context.vfs.fh_to_id(&args.dirops.dir);
@@ -1935,8 +1932,8 @@ pub async fn nfsproc3_symlink(
     // found the directory, get the attributes
     let dirid = dirid.unwrap();
 
-    let mut pre_obj_attr : nfs::pre_op_attr = nfs::pre_op_attr::Void;
-    let mut post_obj_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
+    let mut pre_obj_attr = nfs::pre_op_attr::Void;
+    let mut post_obj_attr = nfs::post_op_attr::Void;
     let res = context
         .vfs
         .symlink(
@@ -2010,9 +2007,9 @@ pub async fn nfsproc3_readlink(
 ) -> Result<(), anyhow::Error> {
     let mut handle = nfs::nfs_fh3::default();
     handle.deserialize(input)?;
-    debug!("nfsproc3_readlink({:?},{:?}) ", xid, handle);
+    debug!("nfsproc3_readlink({:?}, {:?}, {:?}) ", xid, handle, context);
 
-    let user_ctx: UserContext = UserContext::from(&context.auth);
+    let user_ctx = UserContext::from(&context.auth);
     let id = context.vfs.fh_to_id(&handle);
     // fail if unable to convert file handle
     if let Err(stat) = id {
@@ -2021,7 +2018,7 @@ pub async fn nfsproc3_readlink(
         return Ok(());
     }
     let id = id.unwrap();
-    let mut symlink_attr : nfs::post_op_attr = nfs::post_op_attr::Void;
+    let mut symlink_attr = nfs::post_op_attr::Void;
     match context.vfs.readlink(id, &user_ctx, &mut symlink_attr).await {
         Ok(path) => {
             debug!(" {:?} --> {:?}", xid, path);
