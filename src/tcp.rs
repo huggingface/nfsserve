@@ -72,7 +72,7 @@ async fn process_socket(
                         return Err(e);
                     }
                     Some(Ok(msg)) => {
-                        if let Err(e) = write_fragment(&mut socket, &msg).await {
+                        if let Err(e) = write_fragment(&mut socket, msg).await {
                             error!("Write error {:?}", e);
                         }
                     }
@@ -165,6 +165,11 @@ impl<T: NFSFileSystem + Send + Sync + 'static> NFSTcpListener<T> {
             arcfs,
             mount_signal: None,
         })
+    }
+
+    /// Configures RPC to send a different port than we are actually listening on, in the case of weird firewall routing.
+    pub fn with_fake_port(&mut self, port: u16) {
+        self.port = port;
     }
 }
 

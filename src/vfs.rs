@@ -1,5 +1,5 @@
-use crate::nfs::*;
 use crate::nfs;
+use crate::nfs::*;
 use async_trait::async_trait;
 use std::cmp::Ordering;
 use std::sync::Once;
@@ -215,11 +215,7 @@ pub trait NFSFileSystem: Sync {
     async fn readlink(&self, id: fileid3) -> Result<nfspath3, nfsstat3>;
 
     /// Get static file system Information
-    async fn fsinfo(
-        &self,
-        root_fileid: fileid3,
-    ) -> Result<fsinfo3, nfsstat3> {
-
+    async fn fsinfo(&self, root_fileid: fileid3) -> Result<fsinfo3, nfsstat3> {
         let dir_attr: nfs::post_op_attr = match self.getattr(root_fileid).await {
             Ok(v) => nfs::post_op_attr::attributes(v),
             Err(_) => nfs::post_op_attr::Void,
