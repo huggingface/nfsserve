@@ -1,7 +1,7 @@
 [package]
 name = "nfsserve"
 version = "0.10.2"
-edition = "2021"
+edition.workspace = true
 authors = ["Yucheng Low <ylow@xethub.com>"]
 description = "A Rust NFS Server implementation"
 homepage = "https://github.com/xetdata/nfsserve"
@@ -13,35 +13,32 @@ categories = ["network-programming", "filesystem"]
 publish = true
 include = ["src/**/*", "src/*", "Cargo.toml", "LICENSE", "README.md"]
 
+[features]
+strict = []
 
 [lib]
 doctest = false
 
 [dependencies]
-byteorder = "1.4"
-num-traits = "0.2"
+byteorder = "1.5.0"
+num-traits = "0.2.19"
 num-derive = "0.4.2"
-tokio = { version="1", features = [ "net", "io-util", "sync", "fs", "rt", "macros" ], default-features = false }
-tracing = "0.1.31"
-anyhow = "1"
-async-trait = "0.1.9"
-filetime = "0.2"
+tokio = { version="1.43.0", features = [ "net", "io-util", "sync", "fs", "rt", "macros" ], default-features = false }
+tracing = "0.1.41"
+anyhow = "1.0.95"
+async-trait = "0.1.86"
+filetime = "0.2.25"
 
-# demo
-tracing-subscriber = { version = "0.3", features = ["tracing-log"], optional = true }
-intaglio = { version = "1.6", optional = true }
-
-[features]
-strict = []
-demo = ["tracing-subscriber", "tokio/rt-multi-thread", "intaglio"]
+[dev-dependencies]
+tracing-subscriber = { version = "0.3.19", features = ["tracing-log"] }
+intaglio = { version = "1.10"}
+tokio = { version="1.43.0", features = [ "rt-multi-thread" ], default-features = false }
 
 
 [[example]]
 name = "demo"
-required-features = ["demo"]
 path = "examples/demo.rs"
 
 [[example]]
 name = "mirrorfs"
-required-features = ["demo"]
 path = "examples/mirrorfs.rs"
