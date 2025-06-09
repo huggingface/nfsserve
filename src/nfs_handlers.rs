@@ -1002,7 +1002,7 @@ pub async fn nfsproc3_readdir(
 ) -> Result<(), anyhow::Error> {
     let mut args = READDIR3args::default();
     args.deserialize(input)?;
-    debug!("nfsproc3_readdirplus({:?},{:?}) ", xid, args);
+    debug!("nfsproc3_readdir({:?},{:?}) ", xid, args);
 
     let dirid = context.vfs.fh_to_id(&args.dir);
     // fail if unable to convert file handle
@@ -1037,7 +1037,7 @@ pub async fn nfsproc3_readdir(
     let mut ctr = 0;
     match context
         .vfs
-        .readdir_simple(dirid, estimated_max_results as usize)
+        .readdir(dirid, args.cookie, estimated_max_results as usize)
         .await
     {
         Ok(result) => {
