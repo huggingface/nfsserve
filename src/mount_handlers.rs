@@ -1,11 +1,13 @@
+use std::io::{Read, Write};
+
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::cast::{FromPrimitive, ToPrimitive};
+use tracing::debug;
+
 use crate::context::RPCContext;
 use crate::mount::*;
 use crate::rpc::*;
 use crate::xdr::*;
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::cast::{FromPrimitive, ToPrimitive};
-use std::io::{Read, Write};
-use tracing::debug;
 
 /*
 From RFC 1813 Appendix I
@@ -47,22 +49,16 @@ pub async fn handle_mount(
         MountProgram::MOUNTPROC3_NULL => mountproc3_null(xid, input, output)?,
         MountProgram::MOUNTPROC3_MNT => mountproc3_mnt(xid, input, output, context).await?,
         MountProgram::MOUNTPROC3_UMNT => mountproc3_umnt(xid, input, output, context).await?,
-        MountProgram::MOUNTPROC3_UMNTALL => {
-            mountproc3_umnt_all(xid, input, output, context).await?
-        }
+        MountProgram::MOUNTPROC3_UMNTALL => mountproc3_umnt_all(xid, input, output, context).await?,
         MountProgram::MOUNTPROC3_EXPORT => mountproc3_export(xid, input, output, context)?,
         _ => {
             proc_unavail_reply_message(xid).serialize(output)?;
-        }
+        },
     }
     Ok(())
 }
 
-pub fn mountproc3_null(
-    xid: u32,
-    _: &mut impl Read,
-    output: &mut impl Write,
-) -> Result<(), anyhow::Error> {
+pub fn mountproc3_null(xid: u32, _: &mut impl Read, output: &mut impl Write) -> Result<(), anyhow::Error> {
     debug!("mountproc3_null({:?}) ", xid);
     // build an RPC reply
     let msg = make_success_reply(xid);
@@ -77,7 +73,7 @@ struct mountres3_ok {
     fhandle: fhandle3, // really same thing as nfs::nfs_fh3
     auth_flavors: Vec<u32>,
 }
-XDRStruct!(mountres3_ok, fhandle, auth_flavors);
+xdr_struct!(mountres3_ok, fhandle, auth_flavors);
 
 pub async fn mountproc3_mnt(
     xid: u32,
@@ -90,11 +86,7 @@ pub async fn mountproc3_mnt(
     let utf8path = std::str::from_utf8(&path).unwrap_or_default();
     debug!("mountproc3_mnt({:?},{:?}) ", xid, utf8path);
     let path = if let Some(path) = utf8path.strip_prefix(context.export_name.as_str()) {
-        let path = path
-            .trim_start_matches('/')
-            .trim_end_matches('/')
-            .trim()
-            .as_bytes();
+        let path = path.trim_start_matches('/').trim_end_matches('/').trim().as_bytes();
         let mut new_path = Vec::with_capacity(path.len() + 1);
         new_path.push(b'/');
         new_path.extend_from_slice(path);

@@ -1,20 +1,17 @@
-use crate::nfs::*;
-use std::fs::Metadata;
-use std::fs::Permissions;
-
+use std::fs::{Metadata, Permissions};
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
+
 use tokio::fs::OpenOptions;
 use tracing::debug;
+
+use crate::nfs::*;
 
 /// Compares if file metadata has changed in a significant way
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn metadata_differ(lhs: &Metadata, rhs: &Metadata) -> bool {
-    lhs.ino() != rhs.ino()
-        || lhs.mtime() != rhs.mtime()
-        || lhs.len() != rhs.len()
-        || lhs.file_type() != rhs.file_type()
+    lhs.ino() != rhs.ino() || lhs.mtime() != rhs.mtime() || lhs.len() != rhs.len() || lhs.file_type() != rhs.file_type()
 }
 pub fn fattr3_differ(lhs: &fattr3, rhs: &fattr3) -> bool {
     lhs.fileid != rhs.fileid
@@ -126,20 +123,20 @@ pub async fn path_setattr(path: &Path, setattr: &sattr3) -> Result<(), nfsstat3>
     match setattr.atime {
         set_atime::SET_TO_SERVER_TIME => {
             let _ = filetime::set_file_atime(path, filetime::FileTime::now());
-        }
+        },
         set_atime::SET_TO_CLIENT_TIME(time) => {
             let _ = filetime::set_file_atime(path, time.into());
-        }
-        _ => {}
+        },
+        _ => {},
     };
     match setattr.mtime {
         set_mtime::SET_TO_SERVER_TIME => {
             let _ = filetime::set_file_mtime(path, filetime::FileTime::now());
-        }
+        },
         set_mtime::SET_TO_CLIENT_TIME(time) => {
             let _ = filetime::set_file_mtime(path, time.into());
-        }
-        _ => {}
+        },
+        _ => {},
     };
     if let set_mode3::mode(mode) = setattr.mode {
         debug!(" -- set permissions {:?} {:?}", path, mode);
