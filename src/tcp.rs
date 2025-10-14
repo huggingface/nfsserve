@@ -1,17 +1,19 @@
-use crate::context::RPCContext;
-use crate::rpcwire::*;
-use crate::vfs::NFSFileSystem;
+use std::io;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
+use std::time::Duration;
+
 use anyhow;
 use async_trait::async_trait;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::{io, net::IpAddr};
-use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
+
+use crate::context::RPCContext;
+use crate::rpcwire::*;
 use crate::transaction_tracker::TransactionTracker;
+use crate::vfs::NFSFileSystem;
 
 /// A NFS Tcp Connection Handler
 pub struct NFSTcpListener<T: NFSFileSystem + Send + Sync + 'static> {
@@ -24,18 +26,11 @@ pub struct NFSTcpListener<T: NFSFileSystem + Send + Sync + 'static> {
 }
 
 pub fn generate_host_ip(hostnum: u16) -> String {
-    format!(
-        "127.88.{}.{}",
-        ((hostnum >> 8) & 0xFF) as u8,
-        (hostnum & 0xFF) as u8
-    )
+    format!("127.88.{}.{}", ((hostnum >> 8) & 0xFF) as u8, (hostnum & 0xFF) as u8)
 }
 
 /// processes an established socket
-async fn process_socket(
-    mut socket: tokio::net::TcpStream,
-    context: RPCContext,
-) -> Result<(), anyhow::Error> {
+async fn process_socket(mut socket: tokio::net::TcpStream, context: RPCContext) -> Result<(), anyhow::Error> {
     let (mut message_handler, mut socksend, mut msgrecvchan) = SocketMessageHandler::new(&context);
     let _ = socket.set_nodelay(true);
 
@@ -110,18 +105,12 @@ impl<T: NFSFileSystem + Send + Sync + 'static> NFSTcpListener<T> {
     /// "127.0.0.1:12000". fs is an instance of an implementation
     /// of NFSFileSystem.
     pub async fn bind(ipstr: &str, fs: T) -> io::Result<NFSTcpListener<T>> {
-        let (ip, port) = ipstr.split_once(':').ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::AddrNotAvailable,
-                "IP Address must be of form ip:port",
-            )
-        })?;
-        let port = port.parse::<u16>().map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::AddrNotAvailable,
-                "Port not in range 0..=65535",
-            )
-        })?;
+        let (ip, port) = ipstr
+            .split_once(':')
+            .ok_or_else(|| io::Error::new(io::ErrorKind::AddrNotAvailable, "IP Address must be of form ip:port"))?;
+        let port = port
+            .parse::<u16>()
+            .map_err(|_| io::Error::new(io::ErrorKind::AddrNotAvailable, "Port not in range 0..=65535"))?;
 
         let arcfs: Arc<T> = Arc::new(fs);
 
@@ -141,10 +130,10 @@ impl<T: NFSFileSystem + Send + Sync + 'static> NFSTcpListener<T> {
                             num_tries_left -= 1;
                             continue;
                         }
-                    }
+                    },
                     Ok(_) => {
                         return result;
-                    }
+                    },
                 }
             }
             unreachable!(); // Does not detect automatically that loop above never terminates.
@@ -180,13 +169,7 @@ impl<T: NFSFileSystem + Send + Sync + 'static> NFSTcpListener<T> {
     /// Example: Name `foo` results in the export path `/foo`.
     /// Default path is `/` if not set.
     pub fn with_export_name<S: AsRef<str>>(&mut self, export_name: S) {
-        self.export_name = Arc::new(format!(
-            "/{}",
-            export_name
-                .as_ref()
-                .trim_end_matches('/')
-                .trim_start_matches('/')
-        ))
+        self.export_name = Arc::new(format!("/{}", export_name.as_ref().trim_end_matches('/').trim_start_matches('/')))
     }
 }
 

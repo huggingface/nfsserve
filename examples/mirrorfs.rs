@@ -10,14 +10,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use async_trait::async_trait;
 use intaglio::osstr::SymbolTable;
 use intaglio::Symbol;
-use tokio::fs::{File, OpenOptions};
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use tracing::debug;
-
 use nfsserve::fs_util::*;
 use nfsserve::nfs::*;
 use nfsserve::tcp::{NFSTcp, NFSTcpListener};
 use nfsserve::vfs::{DirEntry, NFSFileSystem, ReadDirResult, VFSCapabilities};
+use tokio::fs::{File, OpenOptions};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use tracing::debug;
 
 #[derive(Debug, Clone)]
 struct FSEntry {
@@ -102,22 +101,13 @@ impl FSMap {
     }
 
     fn find_entry(&self, id: fileid3) -> Result<FSEntry, nfsstat3> {
-        Ok(self
-            .id_to_path
-            .get(&id)
-            .ok_or(nfsstat3::NFS3ERR_NOENT)?
-            .clone())
+        Ok(self.id_to_path.get(&id).ok_or(nfsstat3::NFS3ERR_NOENT)?.clone())
     }
     fn find_entry_mut(&mut self, id: fileid3) -> Result<&mut FSEntry, nfsstat3> {
         self.id_to_path.get_mut(&id).ok_or(nfsstat3::NFS3ERR_NOENT)
     }
     async fn find_child(&self, id: fileid3, filename: &[u8]) -> Result<fileid3, nfsstat3> {
-        let mut name = self
-            .id_to_path
-            .get(&id)
-            .ok_or(nfsstat3::NFS3ERR_NOENT)?
-            .name
-            .clone();
+        let mut name = self.id_to_path.get(&id).ok_or(nfsstat3::NFS3ERR_NOENT)?.name.clone();
         name.push(
             self.intern
                 .check_interned(OsStr::from_bytes(filename))
@@ -126,11 +116,7 @@ impl FSMap {
         Ok(*self.path_to_id.get(&name).ok_or(nfsstat3::NFS3ERR_NOENT)?)
     }
     async fn refresh_entry(&mut self, id: fileid3) -> Result<RefreshResult, nfsstat3> {
-        let entry = self
-            .id_to_path
-            .get(&id)
-            .ok_or(nfsstat3::NFS3ERR_NOENT)?
-            .clone();
+        let entry = self.id_to_path.get(&id).ok_or(nfsstat3::NFS3ERR_NOENT)?.clone();
         let path = self.sym_to_path(&entry.name).await;
         //
         if !exists_no_traverse(&path) {
@@ -139,9 +125,7 @@ impl FSMap {
             return Ok(RefreshResult::Delete);
         }
 
-        let meta = tokio::fs::symlink_metadata(&path)
-            .await
-            .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+        let meta = tokio::fs::symlink_metadata(&path).await.map_err(|_| nfsstat3::NFS3ERR_IO)?;
         let meta = metadata_to_fattr3(id, &meta);
         if !fattr3_differ(&meta, &entry.fsmeta) {
             return Ok(RefreshResult::Noop);
@@ -151,14 +135,8 @@ impl FSMap {
             // if the file type changed ex: file->dir or dir->file
             // really the entire file has been replaced.
             // we expire the entire id
-            debug!(
-                "File Type Mismatch FT {:?} : {:?} vs {:?}",
-                id, entry.fsmeta.ftype, meta.ftype
-            );
-            debug!(
-                "File Type Mismatch META {:?} : {:?} vs {:?}",
-                id, entry.fsmeta, meta
-            );
+            debug!("File Type Mismatch FT {:?} : {:?} vs {:?}", id, entry.fsmeta.ftype, meta.ftype);
+            debug!("File Type Mismatch META {:?} : {:?} vs {:?}", id, entry.fsmeta, meta);
             self.delete_entry(id);
             debug!("Deleting entry B {:?}: {:?}. Ent: {:?}", id, path, entry);
             return Ok(RefreshResult::Delete);
@@ -170,11 +148,7 @@ impl FSMap {
         Ok(RefreshResult::Reload)
     }
     async fn refresh_dir_list(&mut self, id: fileid3) -> Result<(), nfsstat3> {
-        let entry = self
-            .id_to_path
-            .get(&id)
-            .ok_or(nfsstat3::NFS3ERR_NOENT)?
-            .clone();
+        let entry = self.id_to_path.get(&id).ok_or(nfsstat3::NFS3ERR_NOENT)?.clone();
         // if there are children and the metadata did not change
         if entry.children.is_some() && !fattr3_differ(&entry.children_meta, &entry.fsmeta) {
             return Ok(());
@@ -187,11 +161,7 @@ impl FSMap {
         let mut new_children: Vec<u64> = Vec::new();
         debug!("Relisting entry {:?}: {:?}. Ent: {:?}", id, path, entry);
         if let Ok(mut listing) = tokio::fs::read_dir(&path).await {
-            while let Some(entry) = listing
-                .next_entry()
-                .await
-                .map_err(|_| nfsstat3::NFS3ERR_IO)?
-            {
+            while let Some(entry) = listing.next_entry().await.map_err(|_| nfsstat3::NFS3ERR_IO)? {
                 let sym = self.intern.intern(entry.file_name()).unwrap();
                 cur_path.push(sym);
                 let meta = entry.metadata().await.unwrap();
@@ -199,10 +169,8 @@ impl FSMap {
                 new_children.push(next_id);
                 cur_path.pop();
             }
-            self.id_to_path
-                .get_mut(&id)
-                .ok_or(nfsstat3::NFS3ERR_NOENT)?
-                .children = Some(BTreeSet::from_iter(new_children.into_iter()));
+            self.id_to_path.get_mut(&id).ok_or(nfsstat3::NFS3ERR_NOENT)?.children =
+                Some(BTreeSet::from_iter(new_children.into_iter()));
         }
 
         Ok(())
@@ -275,15 +243,13 @@ impl MirrorFS {
                 if exists_no_traverse(&path) {
                     return Err(nfsstat3::NFS3ERR_EXIST);
                 }
-                tokio::fs::create_dir(&path)
-                    .await
-                    .map_err(|_| nfsstat3::NFS3ERR_IO)?;
-            }
+                tokio::fs::create_dir(&path).await.map_err(|_| nfsstat3::NFS3ERR_IO)?;
+            },
             CreateFSObject::File(setattr) => {
                 debug!("create {:?}", path);
                 let file = std::fs::File::create(&path).map_err(|_| nfsstat3::NFS3ERR_IO)?;
                 let _ = file_setattr(&file, setattr).await;
-            }
+            },
             CreateFSObject::Exclusive => {
                 debug!("create exclusive {:?}", path);
                 let _ = std::fs::File::options()
@@ -291,7 +257,7 @@ impl MirrorFS {
                     .create_new(true)
                     .open(&path)
                     .map_err(|_| nfsstat3::NFS3ERR_EXIST)?;
-            }
+            },
             CreateFSObject::Symlink((_, target)) => {
                 debug!("symlink {:?} {:?}", path, target);
                 if exists_no_traverse(&path) {
@@ -301,7 +267,7 @@ impl MirrorFS {
                     .await
                     .map_err(|_| nfsstat3::NFS3ERR_IO)?;
                 // we do not set attributes on symlinks
-            }
+            },
         }
 
         let _ = fsmap.refresh_entry(dirid).await;
@@ -313,12 +279,7 @@ impl MirrorFS {
         let fileid = fsmap.create_entry(&name, meta.clone()).await;
 
         // update the children list
-        if let Some(ref mut children) = fsmap
-            .id_to_path
-            .get_mut(&dirid)
-            .ok_or(nfsstat3::NFS3ERR_NOENT)?
-            .children
-        {
+        if let Some(ref mut children) = fsmap.id_to_path.get_mut(&dirid).ok_or(nfsstat3::NFS3ERR_NOENT)?.children {
             children.insert(fileid);
         }
         Ok((fileid, metadata_to_fattr3(fileid, &meta)))
@@ -377,12 +338,7 @@ impl NFSFileSystem for MirrorFS {
         Ok(ent.fsmeta)
     }
 
-    async fn read(
-        &self,
-        id: fileid3,
-        offset: u64,
-        count: u32,
-    ) -> Result<(Vec<u8>, bool), nfsstat3> {
+    async fn read(&self, id: fileid3, offset: u64, count: u32) -> Result<(Vec<u8>, bool), nfsstat3> {
         let fsmap = self.fsmap.lock().await;
         let ent = fsmap.find_entry(id)?;
         let path = fsmap.sym_to_path(&ent.name).await;
@@ -398,9 +354,7 @@ impl NFSFileSystem for MirrorFS {
         if end > len {
             end = len;
         }
-        f.seek(SeekFrom::Start(start))
-            .await
-            .or(Err(nfsstat3::NFS3ERR_IO))?;
+        f.seek(SeekFrom::Start(start)).await.or(Err(nfsstat3::NFS3ERR_IO))?;
         let mut buf = vec![0; (end - start) as usize];
         f.read_exact(&mut buf).await.or(Err(nfsstat3::NFS3ERR_IO))?;
         Ok((buf, eof))
@@ -512,19 +466,11 @@ impl NFSFileSystem for MirrorFS {
         filename: &filename3,
         setattr: sattr3,
     ) -> Result<(fileid3, fattr3), nfsstat3> {
-        self.create_fs_object(dirid, filename, &CreateFSObject::File(setattr))
-            .await
+        self.create_fs_object(dirid, filename, &CreateFSObject::File(setattr)).await
     }
 
-    async fn create_exclusive(
-        &self,
-        dirid: fileid3,
-        filename: &filename3,
-    ) -> Result<fileid3, nfsstat3> {
-        Ok(self
-            .create_fs_object(dirid, filename, &CreateFSObject::Exclusive)
-            .await?
-            .0)
+    async fn create_exclusive(&self, dirid: fileid3, filename: &filename3) -> Result<fileid3, nfsstat3> {
+        Ok(self.create_fs_object(dirid, filename, &CreateFSObject::Exclusive).await?.0)
     }
 
     async fn remove(&self, dirid: fileid3, filename: &filename3) -> Result<(), nfsstat3> {
@@ -534,19 +480,12 @@ impl NFSFileSystem for MirrorFS {
         path.push(OsStr::from_bytes(filename));
         if let Ok(meta) = path.symlink_metadata() {
             if meta.is_dir() {
-                tokio::fs::remove_dir(&path)
-                    .await
-                    .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+                tokio::fs::remove_dir(&path).await.map_err(|_| nfsstat3::NFS3ERR_IO)?;
             } else {
-                tokio::fs::remove_file(&path)
-                    .await
-                    .map_err(|_| nfsstat3::NFS3ERR_IO)?;
+                tokio::fs::remove_file(&path).await.map_err(|_| nfsstat3::NFS3ERR_IO)?;
             }
 
-            let filesym = fsmap
-                .intern
-                .intern(OsStr::from_bytes(filename).to_os_string())
-                .unwrap();
+            let filesym = fsmap.intern.intern(OsStr::from_bytes(filename).to_os_string()).unwrap();
             let mut sympath = ent.name.clone();
             sympath.push(filesym);
             if let Some(fileid) = fsmap.path_to_id.get(&sympath).copied() {
@@ -600,14 +539,8 @@ impl NFSFileSystem for MirrorFS {
             .await
             .map_err(|_| nfsstat3::NFS3ERR_IO)?;
 
-        let oldsym = fsmap
-            .intern
-            .intern(OsStr::from_bytes(from_filename).to_os_string())
-            .unwrap();
-        let newsym = fsmap
-            .intern
-            .intern(OsStr::from_bytes(to_filename).to_os_string())
-            .unwrap();
+        let oldsym = fsmap.intern.intern(OsStr::from_bytes(from_filename).to_os_string()).unwrap();
+        let newsym = fsmap.intern.intern(OsStr::from_bytes(to_filename).to_os_string()).unwrap();
 
         let mut from_sympath = from_dirent.name.clone();
         from_sympath.push(oldsym);
@@ -641,13 +574,8 @@ impl NFSFileSystem for MirrorFS {
 
         Ok(())
     }
-    async fn mkdir(
-        &self,
-        dirid: fileid3,
-        dirname: &filename3,
-    ) -> Result<(fileid3, fattr3), nfsstat3> {
-        self.create_fs_object(dirid, dirname, &CreateFSObject::Directory)
-            .await
+    async fn mkdir(&self, dirid: fileid3, dirname: &filename3) -> Result<(fileid3, fattr3), nfsstat3> {
+        self.create_fs_object(dirid, dirname, &CreateFSObject::Directory).await
     }
 
     async fn symlink(
@@ -657,12 +585,8 @@ impl NFSFileSystem for MirrorFS {
         symlink: &nfspath3,
         attr: &sattr3,
     ) -> Result<(fileid3, fattr3), nfsstat3> {
-        self.create_fs_object(
-            dirid,
-            linkname,
-            &CreateFSObject::Symlink((*attr, symlink.clone())),
-        )
-        .await
+        self.create_fs_object(dirid, linkname, &CreateFSObject::Symlink((*attr, symlink.clone())))
+            .await
     }
     async fn readlink(&self, id: fileid3) -> Result<nfspath3, nfsstat3> {
         let fsmap = self.fsmap.lock().await;
@@ -690,15 +614,11 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    let path = std::env::args()
-        .nth(1)
-        .expect("must supply directory to mirror");
+    let path = std::env::args().nth(1).expect("must supply directory to mirror");
     let path = PathBuf::from(path);
 
     let fs = MirrorFS::new(path);
-    let listener = NFSTcpListener::bind(&format!("127.0.0.1:{HOSTPORT}"), fs)
-        .await
-        .unwrap();
+    let listener = NFSTcpListener::bind(&format!("127.0.0.1:{HOSTPORT}"), fs).await.unwrap();
     listener.handle_forever().await.unwrap();
 }
 // Test with

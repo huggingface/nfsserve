@@ -1,9 +1,11 @@
-use crate::nfs::*;
-use crate::nfs;
-use async_trait::async_trait;
 use std::cmp::Ordering;
 use std::sync::Once;
 use std::time::SystemTime;
+
+use async_trait::async_trait;
+
+use crate::nfs;
+use crate::nfs::*;
 #[derive(Default, Debug)]
 pub struct DirEntrySimple {
     pub fileid: fileid3,
@@ -50,10 +52,7 @@ static GENERATION_NUMBER_INIT: Once = Once::new();
 fn get_generation_number() -> u64 {
     unsafe {
         GENERATION_NUMBER_INIT.call_once(|| {
-            GENERATION_NUMBER = SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64;
+            GENERATION_NUMBER = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
         });
         GENERATION_NUMBER
     }
@@ -92,7 +91,6 @@ pub enum VFSCapabilities {
 ///  getattr needs to be fast. NFS uses that a lot
 //
 ///  The 0 fileid is reserved and should not be used
-///
 #[async_trait]
 pub trait NFSFileSystem: Sync {
     /// Returns the set of capabilities supported
@@ -120,8 +118,7 @@ pub trait NFSFileSystem: Sync {
     /// Note that offset/count may go past the end of the file and that
     /// in that case, all bytes till the end of file are returned.
     /// EOF must be flagged if the end of the file is reached by the read.
-    async fn read(&self, id: fileid3, offset: u64, count: u32)
-        -> Result<(Vec<u8>, bool), nfsstat3>;
+    async fn read(&self, id: fileid3, offset: u64, count: u32) -> Result<(Vec<u8>, bool), nfsstat3>;
 
     /// Writes the contents of a file returning (bytes, EOF)
     /// Note that offset/count may go past the end of the file and that
@@ -133,29 +130,16 @@ pub trait NFSFileSystem: Sync {
     /// Creates a file with the following attributes.
     /// If not supported due to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
-    async fn create(
-        &self,
-        dirid: fileid3,
-        filename: &filename3,
-        attr: sattr3,
-    ) -> Result<(fileid3, fattr3), nfsstat3>;
+    async fn create(&self, dirid: fileid3, filename: &filename3, attr: sattr3) -> Result<(fileid3, fattr3), nfsstat3>;
 
     /// Creates a file if it does not already exist
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
-    async fn create_exclusive(
-        &self,
-        dirid: fileid3,
-        filename: &filename3,
-    ) -> Result<fileid3, nfsstat3>;
+    async fn create_exclusive(&self, dirid: fileid3, filename: &filename3) -> Result<fileid3, nfsstat3>;
 
     /// Makes a directory with the following attributes.
     /// If not supported dur to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
-    async fn mkdir(
-        &self,
-        dirid: fileid3,
-        dirname: &filename3,
-    ) -> Result<(fileid3, fattr3), nfsstat3>;
+    async fn mkdir(&self, dirid: fileid3, dirname: &filename3) -> Result<(fileid3, fattr3), nfsstat3>;
 
     /// Removes a file.
     /// If not supported due to readonly file system
@@ -190,14 +174,8 @@ pub trait NFSFileSystem: Sync {
 
     /// Simple version of readdir.
     /// Only need to return filename and id
-    async fn readdir_simple(
-        &self,
-        dirid: fileid3,
-        count: usize,
-    ) -> Result<ReadDirSimpleResult, nfsstat3> {
-        Ok(ReadDirSimpleResult::from_readdir_result(
-            &self.readdir(dirid, 0, count).await?,
-        ))
+    async fn readdir_simple(&self, dirid: fileid3, count: usize) -> Result<ReadDirSimpleResult, nfsstat3> {
+        Ok(ReadDirSimpleResult::from_readdir_result(&self.readdir(dirid, 0, count).await?))
     }
 
     /// Makes a symlink with the following attributes.
@@ -215,11 +193,7 @@ pub trait NFSFileSystem: Sync {
     async fn readlink(&self, id: fileid3) -> Result<nfspath3, nfsstat3>;
 
     /// Get static file system Information
-    async fn fsinfo(
-        &self,
-        root_fileid: fileid3,
-    ) -> Result<fsinfo3, nfsstat3> {
-
+    async fn fsinfo(&self, root_fileid: fileid3) -> Result<fsinfo3, nfsstat3> {
         let dir_attr: nfs::post_op_attr = match self.getattr(root_fileid).await {
             Ok(v) => nfs::post_op_attr::attributes(v),
             Err(_) => nfs::post_op_attr::Void,

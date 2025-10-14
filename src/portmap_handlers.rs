@@ -1,11 +1,13 @@
+use std::io::{Read, Write};
+
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::cast::FromPrimitive;
+use tracing::{debug, error};
+
 use crate::context::RPCContext;
 use crate::portmap;
 use crate::rpc::*;
 use crate::xdr::*;
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::cast::FromPrimitive;
-use std::io::{Read, Write};
-use tracing::{debug, error};
 
 /*
  From RFC 1057 Appendix A
@@ -43,11 +45,7 @@ pub fn handle_portmap(
     context: &RPCContext,
 ) -> Result<(), anyhow::Error> {
     if call.vers != portmap::VERSION {
-        error!(
-            "Invalid Portmap Version number {} != {}",
-            call.vers,
-            portmap::VERSION
-        );
+        error!("Invalid Portmap Version number {} != {}", call.vers, portmap::VERSION);
         prog_mismatch_reply_message(xid, portmap::VERSION).serialize(output)?;
         return Ok(());
     }
@@ -58,16 +56,12 @@ pub fn handle_portmap(
         PortmapProgram::PMAPPROC_GETPORT => pmapproc_getport(xid, input, output, context)?,
         _ => {
             proc_unavail_reply_message(xid).serialize(output)?;
-        }
+        },
     }
     Ok(())
 }
 
-pub fn pmapproc_null(
-    xid: u32,
-    _: &mut impl Read,
-    output: &mut impl Write,
-) -> Result<(), anyhow::Error> {
+pub fn pmapproc_null(xid: u32, _: &mut impl Read, output: &mut impl Write) -> Result<(), anyhow::Error> {
     debug!("pmapproc_null({:?}) ", xid);
     // build an RPC reply
     let msg = make_success_reply(xid);
