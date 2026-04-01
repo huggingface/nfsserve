@@ -20,12 +20,8 @@ a lot of the work myself.
 So, this is a FUSE-like user-mode filesystem API that basically works by 
 creating a localhost NFSv3 server you can mount.
 
-This is used in [pyxet](https://github.com/xetdata/pyxet) and 
-[xet-core](https://github.com/xetdata/xet-core/) to provide the `xet mount`
-functionality that allows you to mount multi-TB [Xethub](https://about.xethub.com) repository
-anywhere.
-
-This is a blogpost explaining our rationale: https://about.xethub.com/blog/nfs-fuse-why-we-built-nfs-server-rust
+This is used in [xet-core](https://github.com/huggingface/xet-core/) to provide the `xet mount`
+functionality.
 
 Run the Demo
 ============
@@ -77,7 +73,7 @@ TODO and Seeking Contributors
  but prints a lot of garbage due to various unimplemented APIs. Windows 11
  somehow tries to poll with very old NFS protocols constantly.
  - Many many perf optimizations. 
- - Maybe pull in the mount command from [xet-core](https://github.com/xetdata/xet-core/blob/main/rust/gitxetcore/src/xetmnt/mod.rs)
+ - Maybe pull in the mount command from [xet-core](https://github.com/huggingface/xet-core/blob/main/rust/gitxetcore/src/xetmnt/mod.rs)
  so the user does not need to remember the `-o` incantations above.
  - Maybe make an SMB3 implementation so we can work on Windows Home edition
  - NFSv4 has some write performance optimizations that would be quite nice.
