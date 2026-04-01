@@ -3,8 +3,9 @@
 // And its nice to keep the original RFC names and case
 #![allow(non_camel_case_types)]
 
-use crate::xdr::*;
 use std::io::{Read, Write};
+
+use crate::xdr::*;
 // Transcribed from RFC 1057 Appendix A
 
 /// Device Number information. Ex: Major / Minor device
@@ -17,7 +18,7 @@ pub struct mapping {
     pub prot: u32,
     pub port: u32,
 }
-XDRStruct!(mapping, prog, vers, prot, port);
+xdr_struct!(mapping, prog, vers, prot, port);
 pub const IPPROTO_TCP: u32 = 6; /* protocol number for TCP/IP */
 pub const IPPROTO_UDP: u32 = 17; /* protocol number for UDP/IP */
 pub const PROGRAM: u32 = 100000;

@@ -1,11 +1,10 @@
-use byteorder::BigEndian;
-use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
+
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 pub type XDREndian = BigEndian;
 use crate::nfs::nfsstring;
 
 /// See https://datatracker.ietf.org/doc/html/rfc1014
-
 #[allow(clippy::upper_case_acronyms)]
 pub trait XDR {
     fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()>;
@@ -16,7 +15,7 @@ pub trait XDR {
 /// Casts everything as u32 BigEndian
 #[allow(non_camel_case_types)]
 #[macro_export]
-macro_rules! XDREnumSerde {
+macro_rules! xdr_enum_serde {
     ($t:ident) => {
         impl XDR for $t {
             fn serialize<R: Write>(&self, dest: &mut R) -> std::io::Result<()> {
@@ -163,7 +162,7 @@ impl XDR for Vec<u32> {
 
 #[allow(non_camel_case_types)]
 #[macro_export]
-macro_rules! XDRStruct {
+macro_rules! xdr_struct {
     (
         $t:ident,
         $($element:ident),*
@@ -197,7 +196,7 @@ macro_rules! XDRStruct {
 /// The "true" type must have the Default trait
 #[allow(non_camel_case_types)]
 #[macro_export]
-macro_rules! XDRBoolUnion {
+macro_rules! xdr_bool_union {
     (
         $t:ident, $enumcase:ident, $enumtype:ty
     ) => {
@@ -206,11 +205,11 @@ macro_rules! XDRBoolUnion {
                 match self {
                     $t::Void => {
                         false.serialize(dest)?;
-                    }
+                    },
                     $t::$enumcase(v) => {
                         true.serialize(dest)?;
                         v.serialize(dest)?;
-                    }
+                    },
                 }
                 Ok(())
             }
@@ -230,6 +229,4 @@ macro_rules! XDRBoolUnion {
     };
 }
 
-pub(crate) use XDRBoolUnion;
-pub(crate) use XDREnumSerde;
-pub(crate) use XDRStruct;
+pub(crate) use {xdr_bool_union, xdr_enum_serde, xdr_struct};

@@ -3,13 +3,15 @@
 // And its nice to keep the original RFC names and case
 #![allow(non_camel_case_types)]
 
-use crate::xdr::*;
+use std::fmt;
+use std::io::{Read, Write};
+
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use filetime;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::cast::FromPrimitive;
-use std::fmt;
-use std::io::{Read, Write};
+
+use crate::xdr::*;
 
 // Transcribed from RFC 1813.
 
@@ -195,7 +197,7 @@ pub enum nfsstat3 {
     NFS3ERR_JUKEBOX = 10008,
 }
 
-XDREnumSerde!(nfsstat3);
+xdr_enum_serde!(nfsstat3);
 
 /// File Type
 #[allow(non_camel_case_types)]
@@ -218,7 +220,7 @@ pub enum ftype3 {
     /// Named Pipe
     NF3FIFO = 7,
 }
-XDREnumSerde!(ftype3);
+xdr_enum_serde!(ftype3);
 /// Device Number information. Ex: Major / Minor device
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
@@ -227,7 +229,7 @@ pub struct specdata3 {
     pub specdata1: u32,
     pub specdata2: u32,
 }
-XDRStruct!(specdata3, specdata1, specdata2);
+xdr_struct!(specdata3, specdata1, specdata2);
 
 /// File Handle information
 #[allow(non_camel_case_types)]
@@ -235,7 +237,7 @@ XDRStruct!(specdata3, specdata1, specdata2);
 pub struct nfs_fh3 {
     pub data: Vec<u8>,
 }
-XDRStruct!(nfs_fh3, data);
+xdr_struct!(nfs_fh3, data);
 #[allow(clippy::derivable_impls)]
 impl Default for nfs_fh3 {
     fn default() -> nfs_fh3 {
@@ -250,7 +252,7 @@ pub struct nfstime3 {
     pub seconds: u32,
     pub nseconds: u32,
 }
-XDRStruct!(nfstime3, seconds, nseconds);
+xdr_struct!(nfstime3, seconds, nseconds);
 
 impl From<nfstime3> for filetime::FileTime {
     fn from(time: nfstime3) -> Self {
@@ -275,9 +277,7 @@ pub struct fattr3 {
     pub mtime: nfstime3,
     pub ctime: nfstime3,
 }
-XDRStruct!(
-    fattr3, ftype, mode, nlink, uid, gid, size, used, rdev, fsid, fileid, atime, mtime, ctime
-);
+xdr_struct!(fattr3, ftype, mode, nlink, uid, gid, size, used, rdev, fsid, fileid, atime, mtime, ctime);
 
 // Section 3.3.19. Procedure 19: FSINFO - Get static file system Information
 // The following constants are used in fsinfo to construct the bitmask 'properties',
@@ -317,7 +317,7 @@ pub struct fsinfo3 {
     pub time_delta: nfstime3,
     pub properties: u32,
 }
-XDRStruct!(
+xdr_struct!(
     fsinfo3,
     obj_attributes,
     rtmax,
@@ -339,7 +339,7 @@ pub struct wcc_attr {
     pub mtime: nfstime3,
     pub ctime: nfstime3,
 }
-XDRStruct!(wcc_attr, size, mtime, ctime);
+xdr_struct!(wcc_attr, size, mtime, ctime);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
@@ -349,7 +349,7 @@ pub enum pre_op_attr {
     Void,
     attributes(wcc_attr),
 }
-XDRBoolUnion!(pre_op_attr, attributes, wcc_attr);
+xdr_bool_union!(pre_op_attr, attributes, wcc_attr);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
@@ -359,7 +359,7 @@ pub enum post_op_attr {
     Void,
     attributes(fattr3),
 }
-XDRBoolUnion!(post_op_attr, attributes, fattr3);
+xdr_bool_union!(post_op_attr, attributes, fattr3);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default)]
@@ -367,7 +367,7 @@ pub struct wcc_data {
     pub before: pre_op_attr,
     pub after: post_op_attr,
 }
-XDRStruct!(wcc_data, before, after);
+xdr_struct!(wcc_data, before, after);
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
@@ -377,7 +377,7 @@ pub enum post_op_fh3 {
     Void,
     handle(nfs_fh3),
 }
-XDRBoolUnion!(post_op_fh3, handle, nfs_fh3);
+xdr_bool_union!(post_op_fh3, handle, nfs_fh3);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
@@ -389,7 +389,7 @@ pub enum _time_how {
     SET_TO_SERVER_TIME = 1,
     SET_TO_CLIENT_TIME = 2,
 }
-XDREnumSerde!(_time_how);
+xdr_enum_serde!(_time_how);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
@@ -398,7 +398,7 @@ pub enum set_mode3 {
     Void,
     mode(mode3),
 }
-XDRBoolUnion!(set_mode3, mode, mode3);
+xdr_bool_union!(set_mode3, mode, mode3);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
@@ -407,7 +407,7 @@ pub enum set_uid3 {
     Void,
     uid(uid3),
 }
-XDRBoolUnion!(set_uid3, uid, uid3);
+xdr_bool_union!(set_uid3, uid, uid3);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
@@ -416,7 +416,7 @@ pub enum set_gid3 {
     Void,
     gid(gid3),
 }
-XDRBoolUnion!(set_gid3, gid, gid3);
+xdr_bool_union!(set_gid3, gid, gid3);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
@@ -425,7 +425,7 @@ pub enum set_size3 {
     Void,
     size(size3),
 }
-XDRBoolUnion!(set_size3, size, size3);
+xdr_bool_union!(set_size3, size, size3);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
@@ -441,14 +441,14 @@ impl XDR for set_atime {
         match self {
             set_atime::DONT_CHANGE => {
                 0_u32.serialize(dest)?;
-            }
+            },
             set_atime::SET_TO_SERVER_TIME => {
                 1_u32.serialize(dest)?;
-            }
+            },
             set_atime::SET_TO_CLIENT_TIME(v) => {
                 2_u32.serialize(dest)?;
                 v.serialize(dest)?;
-            }
+            },
         }
         Ok(())
     }
@@ -464,10 +464,7 @@ impl XDR for set_atime {
             r.deserialize(src)?;
             *self = set_atime::SET_TO_CLIENT_TIME(r);
         } else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Invalid value for set_atime",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid value for set_atime"));
         }
         Ok(())
     }
@@ -488,14 +485,14 @@ impl XDR for set_mtime {
         match self {
             set_mtime::DONT_CHANGE => {
                 0_u32.serialize(dest)?;
-            }
+            },
             set_mtime::SET_TO_SERVER_TIME => {
                 1_u32.serialize(dest)?;
-            }
+            },
             set_mtime::SET_TO_CLIENT_TIME(v) => {
                 2_u32.serialize(dest)?;
                 v.serialize(dest)?;
-            }
+            },
         }
         Ok(())
     }
@@ -511,10 +508,7 @@ impl XDR for set_mtime {
             r.deserialize(src)?;
             *self = set_mtime::SET_TO_CLIENT_TIME(r);
         } else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Invalid value for set_mtime",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid value for set_mtime"));
         }
         Ok(())
     }
@@ -530,7 +524,7 @@ pub struct sattr3 {
     pub atime: set_atime,
     pub mtime: set_mtime,
 }
-XDRStruct!(sattr3, mode, uid, gid, size, atime, mtime);
+xdr_struct!(sattr3, mode, uid, gid, size, atime, mtime);
 impl Default for sattr3 {
     fn default() -> sattr3 {
         sattr3 {
@@ -550,7 +544,7 @@ pub struct diropargs3 {
     pub dir: nfs_fh3,
     pub name: filename3,
 }
-XDRStruct!(diropargs3, dir, name);
+xdr_struct!(diropargs3, dir, name);
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Default)]
@@ -558,7 +552,7 @@ pub struct symlinkdata3 {
     pub symlink_attributes: sattr3,
     pub symlink_data: nfspath3,
 }
-XDRStruct!(symlinkdata3, symlink_attributes, symlink_data);
+xdr_struct!(symlinkdata3, symlink_attributes, symlink_data);
 
 /// We define the root handle here
 pub fn get_root_mount_handle() -> Vec<u8> {
