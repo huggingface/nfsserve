@@ -20,7 +20,7 @@ a lot of the work myself.
 So, this is a FUSE-like user-mode filesystem API that basically works by 
 creating a localhost NFSv3 server you can mount.
 
-This is used in [xet-core](https://github.com/huggingface/xet-core/) to provide the `xet mount`
+This is used in [hf-mount](https://github.com/huggingface/hf-mount) to provide the `hf-mount`
 functionality.
 
 Run the Demo
