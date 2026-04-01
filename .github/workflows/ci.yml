@@ -22,7 +22,7 @@ jobs:
           components: rustfmt
       - name: Format
         run: |
-          cargo fmt --manifest-path ./Cargo.toml --all -- --check
+          cargo +nightly fmt --manifest-path ./Cargo.toml --all -- --check
 
   build_and_test-linux:
     runs-on: ubuntu-latest
