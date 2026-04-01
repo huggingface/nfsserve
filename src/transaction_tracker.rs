@@ -1,4 +1,4 @@
-use std::collections::{HashMap};
+use std::collections::{hash_map, HashMap};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
@@ -24,11 +24,11 @@ impl TransactionTracker {
         let key = (xid, client_addr.to_string());
         let mut transactions = self.transactions.lock().expect("unable to unlock transactions mutex");
         housekeeping(&mut transactions, self.retention_period);
-        if transactions.contains_key(&key) {
-            true
-        } else {
-            transactions.insert(key, TransactionState::InProgress);
+        if let hash_map::Entry::Vacant(e) = transactions.entry(key) {
+            e.insert(TransactionState::InProgress);
             false
+        } else {
+            true
         }
     }
 

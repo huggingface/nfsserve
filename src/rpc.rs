@@ -3,11 +3,13 @@
 // And its nice to keep the original RFC names and case
 #![allow(non_camel_case_types)]
 
-use crate::xdr::*;
+use std::io::{Read, Write};
+
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::cast::FromPrimitive;
-use std::io::{Read, Write};
+
+use crate::xdr::*;
 // Transcribed from RFC 1057
 
 #[allow(non_camel_case_types)]
@@ -20,7 +22,7 @@ pub enum _msg_type {
     CALL = 0,
     REPLY = 1,
 }
-XDREnumSerde!(_msg_type);
+xdr_enum_serde!(_msg_type);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
@@ -31,7 +33,7 @@ pub enum _reply_stat {
     MSG_ACCEPTED = 0,
     MSG_DENIED = 1,
 }
-XDREnumSerde!(_reply_stat);
+xdr_enum_serde!(_reply_stat);
 
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
@@ -51,7 +53,7 @@ pub enum _accept_stat {
     /// procedure can't decode params
     GARBAGE_ARGS = 4,
 }
-XDREnumSerde!(_accept_stat);
+xdr_enum_serde!(_accept_stat);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
@@ -64,7 +66,7 @@ pub enum _reject_stat {
     /// remote can't authenticate caller
     AUTH_ERROR = 1,
 }
-XDREnumSerde!(_reject_stat);
+xdr_enum_serde!(_reject_stat);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Default, FromPrimitive, ToPrimitive)]
@@ -83,7 +85,7 @@ pub enum auth_stat {
     /// rejected for security reasons
     AUTH_TOOWEAK = 5,
 }
-XDREnumSerde!(auth_stat);
+xdr_enum_serde!(auth_stat);
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, FromPrimitive, ToPrimitive)]
@@ -95,7 +97,7 @@ pub enum auth_flavor {
     AUTH_SHORT = 2,
     AUTH_DES = 3, /* and more to be defined */
 }
-XDREnumSerde!(auth_flavor);
+xdr_enum_serde!(auth_flavor);
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
@@ -106,7 +108,7 @@ pub struct auth_unix {
     gid: u32,
     gids: Vec<u32>,
 }
-XDRStruct!(auth_unix, stamp, machinename, uid, gid, gids);
+xdr_struct!(auth_unix, stamp, machinename, uid, gid, gids);
 
 ///Provisions for authentication of caller to service and vice-versa are
 ///provided as a part of the RPC protocol.  The call message has two
@@ -132,7 +134,7 @@ pub struct opaque_auth {
     pub flavor: auth_flavor,
     pub body: Vec<u8>,
 }
-XDRStruct!(opaque_auth, flavor, body);
+xdr_struct!(opaque_auth, flavor, body);
 impl Default for opaque_auth {
     fn default() -> opaque_auth {
         opaque_auth {
@@ -155,7 +157,7 @@ pub struct rpc_msg {
     pub xid: u32,
     pub body: rpc_body,
 }
-XDRStruct!(rpc_msg, xid, body);
+xdr_struct!(rpc_msg, xid, body);
 
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
@@ -178,11 +180,11 @@ impl XDR for rpc_body {
             rpc_body::CALL(v) => {
                 0_u32.serialize(dest)?;
                 v.serialize(dest)?;
-            }
+            },
             rpc_body::REPLY(v) => {
                 1_u32.serialize(dest)?;
                 v.serialize(dest)?;
-            }
+            },
         }
         Ok(())
     }
@@ -201,9 +203,6 @@ impl XDR for rpc_body {
         Ok(())
     }
 }
-
-#[allow(non_camel_case_types)]
-#[derive(Clone, Debug, Default)]
 
 ///The RPC call message has three unsigned integer fields -- remote
 ///program number, remote program version number, and remote procedure
@@ -254,6 +253,8 @@ impl XDR for rpc_body {
 ///two authentication parameters are followed by the parameters to the
 ///remote procedure, which are specified by the specific program
 ///protocol.
+#[allow(non_camel_case_types)]
+#[derive(Clone, Debug, Default)]
 pub struct call_body {
     /// Must be = 2
     pub rpcvers: u32,
@@ -264,15 +265,17 @@ pub struct call_body {
     pub verf: opaque_auth,
     /* procedure specific parameters start here */
 }
-XDRStruct!(call_body, rpcvers, prog, vers, proc, cred, verf);
+
+xdr_struct!(call_body, rpcvers, prog, vers, proc, cred, verf);
+
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug)]
 #[repr(u32)]
-
 pub enum reply_body {
     MSG_ACCEPTED(accepted_reply),
     MSG_DENIED(rejected_reply),
 }
+
 impl Default for reply_body {
     fn default() -> reply_body {
         reply_body::MSG_ACCEPTED(accepted_reply::default())
@@ -285,11 +288,11 @@ impl XDR for reply_body {
             reply_body::MSG_ACCEPTED(v) => {
                 0_u32.serialize(dest)?;
                 v.serialize(dest)?;
-            }
+            },
             reply_body::MSG_DENIED(v) => {
                 1_u32.serialize(dest)?;
                 v.serialize(dest)?;
-            }
+            },
         }
         Ok(())
     }
@@ -316,7 +319,7 @@ pub struct mismatch_info {
     pub low: u32,
     pub high: u32,
 }
-XDRStruct!(mismatch_info, low, high);
+xdr_struct!(mismatch_info, low, high);
 
 ///Reply to an RPC call that was accepted by the server:
 ///There could be an error even though the call was accepted.  The first
@@ -334,7 +337,7 @@ pub struct accepted_reply {
     pub verf: opaque_auth,
     pub reply_data: accept_body,
 }
-XDRStruct!(accepted_reply, verf, reply_data);
+xdr_struct!(accepted_reply, verf, reply_data);
 
 #[allow(non_camel_case_types)]
 #[allow(clippy::upper_case_acronyms)]
@@ -356,20 +359,20 @@ impl XDR for accept_body {
         match self {
             accept_body::SUCCESS => {
                 0_u32.serialize(dest)?;
-            }
+            },
             accept_body::PROG_UNAVAIL => {
                 1_u32.serialize(dest)?;
-            }
+            },
             accept_body::PROG_MISMATCH(v) => {
                 2_u32.serialize(dest)?;
                 v.serialize(dest)?;
-            }
+            },
             accept_body::PROC_UNAVAIL => {
                 3_u32.serialize(dest)?;
-            }
+            },
             accept_body::GARBAGE_ARGS => {
                 4_u32.serialize(dest)?;
-            }
+            },
         }
         Ok(())
     }
@@ -422,11 +425,11 @@ impl XDR for rejected_reply {
             rejected_reply::RPC_MISMATCH(v) => {
                 0_u32.serialize(dest)?;
                 v.serialize(dest)?;
-            }
+            },
             rejected_reply::AUTH_ERROR(v) => {
                 1_u32.serialize(dest)?;
                 v.serialize(dest)?;
-            }
+            },
         }
         Ok(())
     }

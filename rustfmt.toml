@@ -1,0 +1,13 @@
+format_code_in_doc_comments = true
+wrap_comments = true
+reorder_imports = true
+unstable_features = true
+group_imports = "StdExternalCrate"
+imports_granularity = "Module"
+imports_layout = "Mixed"
+match_block_trailing_comma = true
+comment_width = 120
+max_width = 120
+fn_call_width = 100
+chain_width = 80
+use_field_init_shorthand = true

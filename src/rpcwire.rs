@@ -1,24 +1,14 @@
+use std::io::{Cursor, Read, Write};
+
 use anyhow::anyhow;
-use std::io::Cursor;
-use std::io::{Read, Write};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
+use tokio::sync::mpsc;
 use tracing::{debug, error, trace, warn};
 
 use crate::context::RPCContext;
 use crate::rpc::*;
 use crate::xdr::*;
-
-use crate::mount;
-use crate::mount_handlers;
-
-use crate::nfs;
-use crate::nfs_handlers;
-
-use crate::portmap;
-use crate::portmap_handlers;
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::io::DuplexStream;
-use tokio::sync::mpsc;
+use crate::{mount, mount_handlers, nfs, nfs_handlers, portmap, portmap_handlers};
 
 // Information from RFC 5531
 // https://datatracker.ietf.org/doc/html/rfc5531
@@ -69,15 +59,12 @@ async fn handle_rpc(
                 prog_unavail_reply_message(xid).serialize(output)?;
                 Ok(())
             } else {
-                warn!(
-                    "Unknown RPC Program number {} != {}",
-                    call.prog,
-                    nfs::PROGRAM
-                );
+                warn!("Unknown RPC Program number {} != {}", call.prog, nfs::PROGRAM);
                 prog_unavail_reply_message(xid).serialize(output)?;
                 Ok(())
             }
-        }.map(|_| true);
+        }
+        .map(|_| true);
         context.transaction_tracker.mark_processed(xid, &context.client_addr);
         res
     } else {
@@ -104,10 +91,7 @@ async fn handle_rpc(
 /// length in bytes of the fragment's data.  The boolean value is the
 /// highest-order bit of the header; the length is the 31 low-order bits.
 /// (Note that this record specification is NOT in XDR standard form!)
-async fn read_fragment(
-    socket: &mut DuplexStream,
-    append_to: &mut Vec<u8>,
-) -> Result<bool, anyhow::Error> {
+async fn read_fragment(socket: &mut DuplexStream, append_to: &mut Vec<u8>) -> Result<bool, anyhow::Error> {
     let mut header_buf = [0_u8; 4];
     socket.read_exact(&mut header_buf).await?;
     let fragment_header = u32::from_be_bytes(header_buf);
@@ -117,18 +101,11 @@ async fn read_fragment(
     let start_offset = append_to.len();
     append_to.resize(append_to.len() + length, 0);
     socket.read_exact(&mut append_to[start_offset..]).await?;
-    trace!(
-        "Finishing Reading fragment length:{}, last:{}",
-        length,
-        is_last
-    );
+    trace!("Finishing Reading fragment length:{}, last:{}", length, is_last);
     Ok(is_last)
 }
 
-pub async fn write_fragment(
-    socket: &mut tokio::net::TcpStream,
-    buf: &Vec<u8>,
-) -> Result<(), anyhow::Error> {
+pub async fn write_fragment(socket: &mut tokio::net::TcpStream, buf: &[u8]) -> Result<(), anyhow::Error> {
     // TODO: split into many fragments
     assert!(buf.len() < (1 << 31));
     // set the last flag
@@ -155,13 +132,7 @@ pub struct SocketMessageHandler {
 
 impl SocketMessageHandler {
     /// Creates a new SocketMessageHandler with the receiver for queued message replies
-    pub fn new(
-        context: &RPCContext,
-    ) -> (
-        Self,
-        DuplexStream,
-        mpsc::UnboundedReceiver<SocketMessageType>,
-    ) {
+    pub fn new(context: &RPCContext) -> (Self, DuplexStream, mpsc::UnboundedReceiver<SocketMessageType>) {
         let (socksend, sockrecv) = tokio::io::duplex(256000);
         let (msgsend, msgrecv) = mpsc::unbounded_channel();
         (
@@ -178,8 +149,7 @@ impl SocketMessageHandler {
 
     /// Reads a fragment from the socket. This should be looped.
     pub async fn read(&mut self) -> Result<(), anyhow::Error> {
-        let is_last =
-            read_fragment(&mut self.socket_receive_channel, &mut self.cur_fragment).await?;
+        let is_last = read_fragment(&mut self.socket_receive_channel, &mut self.cur_fragment).await?;
         if is_last {
             let fragment = std::mem::take(&mut self.cur_fragment);
             let context = self.context.clone();
@@ -187,20 +157,19 @@ impl SocketMessageHandler {
             tokio::spawn(async move {
                 let mut write_buf: Vec<u8> = Vec::new();
                 let mut write_cursor = Cursor::new(&mut write_buf);
-                let maybe_reply =
-                    handle_rpc(&mut Cursor::new(fragment), &mut write_cursor, context).await;
+                let maybe_reply = handle_rpc(&mut Cursor::new(fragment), &mut write_cursor, context).await;
                 match maybe_reply {
                     Err(e) => {
                         error!("RPC Error: {:?}", e);
                         let _ = send.send(Err(e));
-                    }
+                    },
                     Ok(true) => {
                         let _ = std::io::Write::flush(&mut write_cursor);
                         let _ = send.send(Ok(write_buf));
-                    }
+                    },
                     Ok(false) => {
                         // do not reply
-                    }
+                    },
                 }
             });
         }

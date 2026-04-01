@@ -1,15 +1,17 @@
 #![allow(clippy::upper_case_acronyms)]
 #![allow(dead_code)]
+use std::io::{Read, Write};
+
+use byteorder::{ReadBytesExt, WriteBytesExt};
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::cast::FromPrimitive;
+use tracing::{debug, error, trace, warn};
+
 use crate::context::RPCContext;
 use crate::nfs;
 use crate::rpc::*;
 use crate::vfs::VFSCapabilities;
 use crate::xdr::*;
-use byteorder::{ReadBytesExt, WriteBytesExt};
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::cast::FromPrimitive;
-use std::io::{Read, Write};
-use tracing::{debug, error, trace, warn};
 /*
 program NFS_PROGRAM {
  version NFS_V3 {
@@ -121,11 +123,7 @@ pub async fn handle_nfs(
     context: &RPCContext,
 ) -> Result<(), anyhow::Error> {
     if call.vers != nfs::VERSION {
-        warn!(
-            "Invalid NFS Version number {} != {}",
-            call.vers,
-            nfs::VERSION
-        );
+        warn!("Invalid NFS Version number {} != {}", call.vers, nfs::VERSION);
         prog_mismatch_reply_message(xid, nfs::VERSION).serialize(output)?;
         return Ok(());
     }
@@ -141,9 +139,7 @@ pub async fn handle_nfs(
         NFSProgram::NFSPROC3_PATHCONF => nfsproc3_pathconf(xid, input, output, context).await?,
         NFSProgram::NFSPROC3_FSSTAT => nfsproc3_fsstat(xid, input, output, context).await?,
         NFSProgram::NFSPROC3_READDIR => nfsproc3_readdir(xid, input, output, context).await?,
-        NFSProgram::NFSPROC3_READDIRPLUS => {
-            nfsproc3_readdirplus(xid, input, output, context).await?
-        }
+        NFSProgram::NFSPROC3_READDIRPLUS => nfsproc3_readdirplus(xid, input, output, context).await?,
         NFSProgram::NFSPROC3_WRITE => nfsproc3_write(xid, input, output, context).await?,
         NFSProgram::NFSPROC3_CREATE => nfsproc3_create(xid, input, output, context).await?,
         NFSProgram::NFSPROC3_SETATTR => nfsproc3_setattr(xid, input, output, context).await?,
@@ -156,20 +152,16 @@ pub async fn handle_nfs(
         _ => {
             warn!("Unimplemented message {:?}", prog);
             proc_unavail_reply_message(xid).serialize(output)?;
-        } /*
-          NFSPROC3_MKNOD,
-          NFSPROC3_LINK,
-          NFSPROC3_COMMIT,
-          INVALID*/
+        }, /*
+           NFSPROC3_MKNOD,
+           NFSPROC3_LINK,
+           NFSPROC3_COMMIT,
+           INVALID*/
     }
     Ok(())
 }
 
-pub fn nfsproc3_null(
-    xid: u32,
-    _: &mut impl Read,
-    output: &mut impl Write,
-) -> Result<(), anyhow::Error> {
+pub fn nfsproc3_null(xid: u32, _: &mut impl Read, output: &mut impl Write) -> Result<(), anyhow::Error> {
     debug!("nfsproc3_null({:?}) ", xid);
     let msg = make_success_reply(xid);
     debug!("\t{:?} --> {:?}", xid, msg);
@@ -217,12 +209,12 @@ pub async fn nfsproc3_getattr(
             make_success_reply(xid).serialize(output)?;
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
             fh.serialize(output)?;
-        }
+        },
         Err(stat) => {
             error!("getattr error {:?} --> {:?}", xid, stat);
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
-        }
+        },
     }
     Ok(())
 }
@@ -289,13 +281,13 @@ pub async fn nfsproc3_lookup(
             context.vfs.id_to_fh(fid).serialize(output)?;
             obj_attr.serialize(output)?;
             dir_attr.serialize(output)?;
-        }
+        },
         Err(stat) => {
             debug!("lookup error {:?}({:?}) --> {:?}", xid, dirops.name, stat);
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             dir_attr.serialize(output)?;
-        }
+        },
     }
     Ok(())
 }
@@ -307,7 +299,7 @@ struct READ3args {
     offset: nfs::offset3,
     count: nfs::count3,
 }
-XDRStruct!(READ3args, file, offset, count);
+xdr_struct!(READ3args, file, offset, count);
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Default)]
@@ -317,7 +309,7 @@ struct READ3resok {
     eof: bool,
     data: Vec<u8>,
 }
-XDRStruct!(READ3resok, file_attributes, count, eof, data);
+xdr_struct!(READ3resok, file_attributes, count, eof, data);
 /*
 READ3res NFSPROC3_READ(READ3args) = 6;
 
@@ -379,13 +371,13 @@ pub async fn nfsproc3_read(
             make_success_reply(xid).serialize(output)?;
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
             res.serialize(output)?;
-        }
+        },
         Err(stat) => {
             error!("read error {:?} --> {:?}", xid, stat);
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             obj_attr.serialize(output)?;
-        }
+        },
     }
     Ok(())
 }
@@ -455,12 +447,12 @@ pub async fn nfsproc3_fsinfo(
             make_success_reply(xid).serialize(output)?;
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
             fsinfo.serialize(output)?;
-        }
+        },
         Err(stat) => {
             error!("fsinfo error {:?} --> {:?}", xid, stat);
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
-        }
+        },
     }
     Ok(())
 }
@@ -547,7 +539,7 @@ struct PATHCONF3resok {
     case_insensitive: bool,
     case_preserving: bool,
 }
-XDRStruct!(
+xdr_struct!(
     PATHCONF3resok,
     obj_attributes,
     linkmax,
@@ -638,17 +630,7 @@ struct FSSTAT3resok {
     afiles: nfs::size3,
     invarsec: u32,
 }
-XDRStruct!(
-    FSSTAT3resok,
-    obj_attributes,
-    tbytes,
-    fbytes,
-    abytes,
-    tfiles,
-    ffiles,
-    afiles,
-    invarsec
-);
+xdr_struct!(FSSTAT3resok, obj_attributes, tbytes, fbytes, abytes, tfiles, ffiles, afiles, invarsec);
 
 /*
  FSSTAT3res NFSPROC3_FSSTAT(FSSTAT3args) = 18;
@@ -730,14 +712,7 @@ struct READDIRPLUS3args {
     dircount: nfs::count3,
     maxcount: nfs::count3,
 }
-XDRStruct!(
-    READDIRPLUS3args,
-    dir,
-    cookie,
-    cookieverf,
-    dircount,
-    maxcount
-);
+xdr_struct!(READDIRPLUS3args, dir, cookie, cookieverf, dircount, maxcount);
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Default)]
@@ -746,7 +721,7 @@ struct entry3 {
     name: nfs::filename3,
     cookie: nfs::cookie3,
 }
-XDRStruct!(entry3, fileid, name, cookie);
+xdr_struct!(entry3, fileid, name, cookie);
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Default)]
@@ -756,7 +731,7 @@ struct READDIR3args {
     cookieverf: nfs::cookieverf3,
     dircount: nfs::count3,
 }
-XDRStruct!(READDIR3args, dir, cookie, cookieverf, dircount);
+xdr_struct!(READDIR3args, dir, cookie, cookieverf, dircount);
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Default)]
@@ -767,14 +742,7 @@ struct entryplus3 {
     name_attributes: nfs::post_op_attr,
     name_handle: nfs::post_op_fh3,
 }
-XDRStruct!(
-    entryplus3,
-    fileid,
-    name,
-    cookie,
-    name_attributes,
-    name_handle
-);
+xdr_struct!(entryplus3, fileid, name, cookie, name_attributes, name_handle);
 /*
 
       READDIRPLUS3res NFSPROC3_READDIRPLUS(READDIRPLUS3args) = 17;
@@ -873,12 +841,9 @@ pub async fn nfsproc3_readdirplus(
     //  1. If part way through a directory enumeration we fail with BAD_COOKIE
     //  if the directory contents change, the client listing may fail resulting
     //  in a "no such file or directory" error.
-    //  2. if we cache readdir results. i.e. we think of a readdir as two parts
-    //     a. enumerating everything first
-    //     b. the cookie is then used to paginate the enumeration
-    //     we can run into file time synchronization issues. i.e. while one
-    //     listing occurs and another file is touched, the listing may report
-    //     an outdated file status.
+    //  2. if we cache readdir results. i.e. we think of a readdir as two parts a. enumerating everything first b. the
+    //     cookie is then used to paginate the enumeration we can run into file time synchronization issues. i.e. while
+    //     one listing occurs and another file is touched, the listing may report an outdated file status.
     //
     //     This cache also appears to have to be *quite* long lasting
     //     as the client may hold on to a directory enumerator
@@ -907,11 +872,7 @@ pub async fn nfsproc3_readdirplus(
     let estimated_max_results = args.dircount / 16;
     let max_dircount_bytes = args.dircount as usize;
     let mut ctr = 0;
-    match context
-        .vfs
-        .readdir(dirid, args.cookie, estimated_max_results as usize)
-        .await
-    {
+    match context.vfs.readdir(dirid, args.cookie, estimated_max_results as usize).await {
         Ok(result) => {
             // we count dir_count seperately as it is just a subset of fields
             let mut accumulated_dircount: usize = 0;
@@ -983,13 +944,13 @@ pub async fn nfsproc3_readdirplus(
                 "readir {}, has_version {},  start at {}, flushing {} entries, complete {}",
                 dirid, has_version, args.cookie, ctr, all_entries_written
             );
-        }
+        },
         Err(stat) => {
             error!("readdir error {:?} --> {:?} ", xid, stat);
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             dir_attr.serialize(output)?;
-        }
+        },
     };
     Ok(())
 }
@@ -1035,11 +996,7 @@ pub async fn nfsproc3_readdir(
     // This is hard to ballpark, so we just divide it by 16
     let estimated_max_results = args.dircount / 16;
     let mut ctr = 0;
-    match context
-        .vfs
-        .readdir_simple(dirid, estimated_max_results as usize)
-        .await
-    {
+    match context.vfs.readdir_simple(dirid, estimated_max_results as usize).await {
         Ok(result) => {
             // we count dir_count seperately as it is just a subset of fields
             let mut accumulated_dircount: usize = 0;
@@ -1103,13 +1060,13 @@ pub async fn nfsproc3_readdir(
                 "readir {}, has_version {},  start at {}, flushing {} entries, complete {}",
                 dirid, has_version, args.cookie, ctr, all_entries_written
             );
-        }
+        },
         Err(stat) => {
             error!("readdir error {:?} --> {:?} ", xid, stat);
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             dir_attr.serialize(output)?;
-        }
+        },
     };
     Ok(())
 }
@@ -1123,7 +1080,7 @@ pub enum stable_how {
     DATA_SYNC = 1,
     FILE_SYNC = 2,
 }
-XDREnumSerde!(stable_how);
+xdr_enum_serde!(stable_how);
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Default)]
@@ -1134,7 +1091,7 @@ struct WRITE3args {
     stable: u32,
     data: Vec<u8>,
 }
-XDRStruct!(WRITE3args, file, offset, count, stable, data);
+xdr_struct!(WRITE3args, file, offset, count, stable, data);
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Default)]
@@ -1144,7 +1101,7 @@ struct WRITE3resok {
     committed: stable_how,
     verf: nfs::writeverf3,
 }
-XDRStruct!(WRITE3resok, file_wcc, count, committed, verf);
+xdr_struct!(WRITE3resok, file_wcc, count, committed, verf);
 /*
 enum stable_how {
     UNSTABLE = 0,
@@ -1224,7 +1181,7 @@ pub async fn nfsproc3_write(
                 ctime: v.ctime,
             };
             nfs::pre_op_attr::attributes(wccattr)
-        }
+        },
         Err(_) => nfs::pre_op_attr::Void,
     };
 
@@ -1243,13 +1200,13 @@ pub async fn nfsproc3_write(
             make_success_reply(xid).serialize(output)?;
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
             res.serialize(output)?;
-        }
+        },
         Err(stat) => {
             error!("write error {:?} --> {:?}", xid, stat);
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             nfs::wcc_data::default().serialize(output)?;
-        }
+        },
     }
     Ok(())
 }
@@ -1263,7 +1220,7 @@ pub enum createmode3 {
     GUARDED = 1,
     EXCLUSIVE = 2,
 }
-XDREnumSerde!(createmode3);
+xdr_enum_serde!(createmode3);
 /*
 CREATE3res NFSPROC3_CREATE(CREATE3args) = 8;
 
@@ -1349,14 +1306,14 @@ pub async fn nfsproc3_create(
                 ctime: v.ctime,
             };
             nfs::pre_op_attr::attributes(wccattr)
-        }
+        },
         Err(stat) => {
             error!("Cannot stat directory");
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             nfs::wcc_data::default().serialize(output)?;
             return Ok(());
-        }
+        },
     };
     let mut target_attributes = nfs::sattr3::default();
 
@@ -1364,7 +1321,7 @@ pub async fn nfsproc3_create(
         createmode3::UNCHECKED => {
             target_attributes.deserialize(input)?;
             debug!("create unchecked {:?}", target_attributes);
-        }
+        },
         createmode3::GUARDED => {
             target_attributes.deserialize(input)?;
             debug!("create guarded {:?}", target_attributes);
@@ -1386,10 +1343,10 @@ pub async fn nfsproc3_create(
                 .serialize(output)?;
                 return Ok(());
             }
-        }
+        },
         createmode3::EXCLUSIVE => {
             debug!("create exclusive");
-        }
+        },
     }
 
     let fid: Result<nfs::fileid3, nfs::nfsstat3>;
@@ -1402,10 +1359,7 @@ pub async fn nfsproc3_create(
         postopattr = nfs::post_op_attr::Void;
     } else {
         // create!
-        let res = context
-            .vfs
-            .create(dirid, &dirops.name, target_attributes)
-            .await;
+        let res = context.vfs.create(dirid, &dirops.name, target_attributes).await;
         fid = res.map(|x| x.0);
         postopattr = if let Ok((_, fattr)) = res {
             nfs::post_op_attr::attributes(fattr)
@@ -1434,14 +1388,14 @@ pub async fn nfsproc3_create(
             nfs::post_op_fh3::handle(fh).serialize(output)?;
             postopattr.serialize(output)?;
             wcc_res.serialize(output)?;
-        }
+        },
         Err(e) => {
             error!("create error --> {:?}", e);
             // serialize CREATE3resfail
             make_success_reply(xid).serialize(output)?;
             e.serialize(output)?;
             wcc_res.serialize(output)?;
-        }
+        },
     }
 
     Ok(())
@@ -1455,7 +1409,7 @@ pub enum sattrguard3 {
     Void,
     obj_ctime(nfs::nfstime3),
 }
-XDRBoolUnion!(sattrguard3, obj_ctime, nfs::nfstime3);
+xdr_bool_union!(sattrguard3, obj_ctime, nfs::nfstime3);
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Default)]
@@ -1464,7 +1418,7 @@ struct SETATTR3args {
     new_attribute: nfs::sattr3,
     guard: sattrguard3,
 }
-XDRStruct!(SETATTR3args, object, new_attribute, guard);
+xdr_struct!(SETATTR3args, object, new_attribute, guard);
 
 /*
     SETATTR3res NFSPROC3_SETATTR(SETATTR3args) = 2;
@@ -1534,24 +1488,24 @@ pub async fn nfsproc3_setattr(
             };
             ctime = v.ctime;
             nfs::pre_op_attr::attributes(wccattr)
-        }
+        },
         Err(stat) => {
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             nfs::wcc_data::default().serialize(output)?;
             return Ok(());
-        }
+        },
     };
     // handle the guard
     match args.guard {
-        sattrguard3::Void => {}
+        sattrguard3::Void => {},
         sattrguard3::obj_ctime(c) => {
             if c.seconds != ctime.seconds || c.nseconds != ctime.nseconds {
                 make_success_reply(xid).serialize(output)?;
                 nfs::nfsstat3::NFS3ERR_NOT_SYNC.serialize(output)?;
                 nfs::wcc_data::default().serialize(output)?;
             }
-        }
+        },
     }
 
     match context.vfs.setattr(id, args.new_attribute).await {
@@ -1564,13 +1518,13 @@ pub async fn nfsproc3_setattr(
             make_success_reply(xid).serialize(output)?;
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
             wcc_res.serialize(output)?;
-        }
+        },
         Err(stat) => {
             error!("setattr error {:?} --> {:?}", xid, stat);
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             nfs::wcc_data::default().serialize(output)?;
-        }
+        },
     }
     Ok(())
 }
@@ -1641,14 +1595,14 @@ pub async fn nfsproc3_remove(
                 ctime: v.ctime,
             };
             nfs::pre_op_attr::attributes(wccattr)
-        }
+        },
         Err(stat) => {
             error!("Cannot stat directory");
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             nfs::wcc_data::default().serialize(output)?;
             return Ok(());
-        }
+        },
     };
 
     // delete!
@@ -1670,14 +1624,14 @@ pub async fn nfsproc3_remove(
             make_success_reply(xid).serialize(output)?;
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
             wcc_res.serialize(output)?;
-        }
+        },
         Err(e) => {
             error!("remove error {:?} --> {:?}", xid, e);
             // serialize CREATE3resfail
             make_success_reply(xid).serialize(output)?;
             e.serialize(output)?;
             wcc_res.serialize(output)?;
-        }
+        },
     }
 
     Ok(())
@@ -1729,10 +1683,7 @@ pub async fn nfsproc3_rename(
     fromdirops.deserialize(input)?;
     todirops.deserialize(input)?;
 
-    debug!(
-        "nfsproc3_rename({:?}, {:?}, {:?}) ",
-        xid, fromdirops, todirops
-    );
+    debug!("nfsproc3_rename({:?}, {:?}, {:?}) ", xid, fromdirops, todirops);
 
     // find the from directory
     let from_dirid = context.vfs.fh_to_id(&fromdirops.dir);
@@ -1769,14 +1720,14 @@ pub async fn nfsproc3_rename(
                 ctime: v.ctime,
             };
             nfs::pre_op_attr::attributes(wccattr)
-        }
+        },
         Err(stat) => {
             error!("Cannot stat directory");
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             nfs::wcc_data::default().serialize(output)?;
             return Ok(());
-        }
+        },
     };
 
     // get the object attributes before the write
@@ -1788,21 +1739,18 @@ pub async fn nfsproc3_rename(
                 ctime: v.ctime,
             };
             nfs::pre_op_attr::attributes(wccattr)
-        }
+        },
         Err(stat) => {
             error!("Cannot stat directory");
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             nfs::wcc_data::default().serialize(output)?;
             return Ok(());
-        }
+        },
     };
 
     // rename!
-    let res = context
-        .vfs
-        .rename(from_dirid, &fromdirops.name, to_dirid, &todirops.name)
-        .await;
+    let res = context.vfs.rename(from_dirid, &fromdirops.name, to_dirid, &todirops.name).await;
 
     // Re-read dir attributes for post op attr
     let post_from_dir_attr = match context.vfs.getattr(from_dirid).await {
@@ -1830,7 +1778,7 @@ pub async fn nfsproc3_rename(
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
             from_wcc_res.serialize(output)?;
             to_wcc_res.serialize(output)?;
-        }
+        },
         Err(e) => {
             error!("rename error {:?} --> {:?}", xid, e);
             // serialize CREATE3resfail
@@ -1838,7 +1786,7 @@ pub async fn nfsproc3_rename(
             e.serialize(output)?;
             from_wcc_res.serialize(output)?;
             to_wcc_res.serialize(output)?;
-        }
+        },
     }
 
     Ok(())
@@ -1877,7 +1825,7 @@ struct MKDIR3args {
     dirops: nfs::diropargs3,
     attributes: nfs::sattr3,
 }
-XDRStruct!(MKDIR3args, dirops, attributes);
+xdr_struct!(MKDIR3args, dirops, attributes);
 
 pub async fn nfsproc3_mkdir(
     xid: u32,
@@ -1921,14 +1869,14 @@ pub async fn nfsproc3_mkdir(
                 ctime: v.ctime,
             };
             nfs::pre_op_attr::attributes(wccattr)
-        }
+        },
         Err(stat) => {
             error!("Cannot stat directory");
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             nfs::wcc_data::default().serialize(output)?;
             return Ok(());
-        }
+        },
     };
 
     let res = context.vfs.mkdir(dirid, &args.dirops.name).await;
@@ -1953,14 +1901,14 @@ pub async fn nfsproc3_mkdir(
             nfs::post_op_fh3::handle(fh).serialize(output)?;
             nfs::post_op_attr::attributes(fattr).serialize(output)?;
             wcc_res.serialize(output)?;
-        }
+        },
         Err(e) => {
             debug!("mkdir error {:?} --> {:?}", xid, e);
             // serialize CREATE3resfail
             make_success_reply(xid).serialize(output)?;
             e.serialize(output)?;
             wcc_res.serialize(output)?;
-        }
+        },
     }
 
     Ok(())
@@ -2003,7 +1951,7 @@ struct SYMLINK3args {
     dirops: nfs::diropargs3,
     symlink: nfs::symlinkdata3,
 }
-XDRStruct!(SYMLINK3args, dirops, symlink);
+xdr_struct!(SYMLINK3args, dirops, symlink);
 
 pub async fn nfsproc3_symlink(
     xid: u32,
@@ -2047,24 +1995,19 @@ pub async fn nfsproc3_symlink(
                 ctime: v.ctime,
             };
             nfs::pre_op_attr::attributes(wccattr)
-        }
+        },
         Err(stat) => {
             error!("Cannot stat directory");
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             nfs::wcc_data::default().serialize(output)?;
             return Ok(());
-        }
+        },
     };
 
     let res = context
         .vfs
-        .symlink(
-            dirid,
-            &args.dirops.name,
-            &args.symlink.symlink_data,
-            &args.symlink.symlink_attributes,
-        )
+        .symlink(dirid, &args.dirops.name, &args.symlink.symlink_data, &args.symlink.symlink_attributes)
         .await;
 
     // Re-read dir attributes for post op attr
@@ -2087,14 +2030,14 @@ pub async fn nfsproc3_symlink(
             nfs::post_op_fh3::handle(fh).serialize(output)?;
             nfs::post_op_attr::attributes(fattr).serialize(output)?;
             wcc_res.serialize(output)?;
-        }
+        },
         Err(e) => {
             debug!("symlink error --> {:?}", e);
             // serialize CREATE3resfail
             make_success_reply(xid).serialize(output)?;
             e.serialize(output)?;
             wcc_res.serialize(output)?;
-        }
+        },
     }
 
     Ok(())
@@ -2150,7 +2093,7 @@ pub async fn nfsproc3_readlink(
             stat.serialize(output)?;
             nfs::post_op_attr::Void.serialize(output)?;
             return Ok(());
-        }
+        },
     };
     match context.vfs.readlink(id).await {
         Ok(path) => {
@@ -2159,14 +2102,14 @@ pub async fn nfsproc3_readlink(
             nfs::nfsstat3::NFS3_OK.serialize(output)?;
             symlink_attr.serialize(output)?;
             path.serialize(output)?;
-        }
+        },
         Err(stat) => {
             // failed to read link
             // retry with failure and the post_op_attr
             make_success_reply(xid).serialize(output)?;
             stat.serialize(output)?;
             symlink_attr.serialize(output)?;
-        }
+        },
     }
     Ok(())
 }
