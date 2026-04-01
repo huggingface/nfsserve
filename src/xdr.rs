@@ -229,4 +229,6 @@ macro_rules! xdr_bool_union {
     };
 }
 
-pub(crate) use {xdr_bool_union, xdr_enum_serde, xdr_struct};
+pub(crate) use xdr_bool_union;
+pub(crate) use xdr_enum_serde;
+pub(crate) use xdr_struct;
