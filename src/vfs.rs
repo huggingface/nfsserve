@@ -146,7 +146,7 @@ pub trait NFSFileSystem: Sync {
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
     async fn remove(&self, dirid: fileid3, filename: &filename3) -> Result<(), nfsstat3>;
 
-    /// Removes a file.
+    /// Renames a file.
     /// If not supported due to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
     async fn rename(
