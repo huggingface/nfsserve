@@ -11,6 +11,7 @@ mod mount_handlers;
 
 mod portmap;
 mod portmap_handlers;
+pub mod portmap_listener;
 
 pub mod nfs;
 mod nfs_handlers;
