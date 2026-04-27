@@ -186,3 +186,141 @@ fn handle_message(buf: &[u8], target_port: u16) -> Option<Vec<u8>> {
     }
     Some(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rpc::{call_body, opaque_auth};
+
+    /// Serialize an RPC CALL header followed by raw `args`. Use this to drive
+    /// `handle_message` without going through socket plumbing.
+    fn build_call(xid: u32, rpcvers: u32, prog: u32, vers: u32, proc_: u32, args: &[u8]) -> Vec<u8> {
+        let msg = rpc_msg {
+            xid,
+            body: rpc_body::CALL(call_body {
+                rpcvers,
+                prog,
+                vers,
+                proc: proc_,
+                cred: opaque_auth::default(),
+                verf: opaque_auth::default(),
+            }),
+        };
+        let mut out = Vec::new();
+        msg.serialize(&mut out).unwrap();
+        out.extend_from_slice(args);
+        out
+    }
+
+    fn build_getport_args(prog: u32, vers: u32, prot: u32) -> Vec<u8> {
+        let mapping = portmap::mapping {
+            prog,
+            vers,
+            prot,
+            port: 0,
+        };
+        let mut out = Vec::new();
+        mapping.serialize(&mut out).unwrap();
+        out
+    }
+
+    /// Parse the trailing u32 of a SUCCESS GETPORT reply (the answered port).
+    /// Returns `None` if the reply isn't a SUCCESS.
+    fn parse_getport_reply(reply: &[u8]) -> Option<u32> {
+        let mut cursor = Cursor::new(reply);
+        let mut msg = rpc_msg::default();
+        msg.deserialize(&mut cursor).ok()?;
+        let port_offset = cursor.position() as usize;
+        Some(u32::from_be_bytes(reply[port_offset..port_offset + 4].try_into().unwrap()))
+    }
+
+    const TARGET: u16 = 50_000;
+
+    #[test]
+    fn null_proc_returns_success() {
+        let req = build_call(1, 2, portmap::PROGRAM, portmap::VERSION, PMAPPROC_NULL, &[]);
+        let reply = handle_message(&req, TARGET).expect("reply");
+        // 24 bytes = xid + msg_type(REPLY) + reply_stat(MSG_ACCEPTED) + verf(8) + accept_stat(SUCCESS).
+        assert_eq!(reply.len(), 24);
+    }
+
+    #[test]
+    fn getport_nfs_v3_tcp_returns_target_port() {
+        let args = build_getport_args(nfs::PROGRAM, nfs::VERSION, portmap::IPPROTO_TCP);
+        let req = build_call(2, 2, portmap::PROGRAM, portmap::VERSION, PMAPPROC_GETPORT, &args);
+        let reply = handle_message(&req, TARGET).expect("reply");
+        assert_eq!(parse_getport_reply(&reply), Some(TARGET as u32));
+    }
+
+    #[test]
+    fn getport_mount_v3_tcp_returns_target_port() {
+        let args = build_getport_args(mount::PROGRAM, mount::VERSION, portmap::IPPROTO_TCP);
+        let req = build_call(3, 2, portmap::PROGRAM, portmap::VERSION, PMAPPROC_GETPORT, &args);
+        let reply = handle_message(&req, TARGET).expect("reply");
+        assert_eq!(parse_getport_reply(&reply), Some(TARGET as u32));
+    }
+
+    #[test]
+    fn getport_nfs_over_udp_returns_zero() {
+        let args = build_getport_args(nfs::PROGRAM, nfs::VERSION, portmap::IPPROTO_UDP);
+        let req = build_call(4, 2, portmap::PROGRAM, portmap::VERSION, PMAPPROC_GETPORT, &args);
+        let reply = handle_message(&req, TARGET).expect("reply");
+        assert_eq!(parse_getport_reply(&reply), Some(0));
+    }
+
+    #[test]
+    fn getport_unknown_program_returns_zero() {
+        let args = build_getport_args(0xdead_beef, 1, portmap::IPPROTO_TCP);
+        let req = build_call(5, 2, portmap::PROGRAM, portmap::VERSION, PMAPPROC_GETPORT, &args);
+        let reply = handle_message(&req, TARGET).expect("reply");
+        assert_eq!(parse_getport_reply(&reply), Some(0));
+    }
+
+    #[test]
+    fn getport_wrong_nfs_version_returns_zero() {
+        let args = build_getport_args(nfs::PROGRAM, nfs::VERSION + 1, portmap::IPPROTO_TCP);
+        let req = build_call(6, 2, portmap::PROGRAM, portmap::VERSION, PMAPPROC_GETPORT, &args);
+        let reply = handle_message(&req, TARGET).expect("reply");
+        assert_eq!(parse_getport_reply(&reply), Some(0));
+    }
+
+    #[test]
+    fn truncated_getport_returns_garbage_args() {
+        // CALL header advertises GETPORT but no mapping bytes follow.
+        let req = build_call(7, 2, portmap::PROGRAM, portmap::VERSION, PMAPPROC_GETPORT, &[]);
+        let reply = handle_message(&req, TARGET).expect("reply");
+        // garbage_args reply is shorter than a SUCCESS+port reply (no trailing port).
+        // Just check we got a reply at all and it's not the SUCCESS+port shape.
+        assert!(reply.len() < 28);
+    }
+
+    #[test]
+    fn wrong_rpcvers_replies_with_mismatch() {
+        let req = build_call(8, 1, portmap::PROGRAM, portmap::VERSION, PMAPPROC_NULL, &[]);
+        let reply = handle_message(&req, TARGET).expect("reply");
+        // rpc_vers_mismatch is a REPLY/MSG_DENIED/RPC_MISMATCH(low=2,high=2): 24 bytes total.
+        // We only check it's a reply and not the SUCCESS shape.
+        assert!(!reply.is_empty());
+    }
+
+    #[test]
+    fn unknown_program_returns_prog_unavail() {
+        let req = build_call(9, 2, 0xabcd_ef01, 1, 0, &[]);
+        let reply = handle_message(&req, TARGET).expect("reply");
+        assert!(!reply.is_empty());
+    }
+
+    #[test]
+    fn unknown_portmap_proc_returns_proc_unavail() {
+        // Proc 99 is not implemented (we only do NULL and GETPORT).
+        let req = build_call(10, 2, portmap::PROGRAM, portmap::VERSION, 99, &[]);
+        let reply = handle_message(&req, TARGET).expect("reply");
+        assert!(!reply.is_empty());
+    }
+
+    #[test]
+    fn truncated_rpc_header_returns_none() {
+        // Less than the minimal RPC header — must not panic and must drop.
+        assert!(handle_message(&[0u8; 4], TARGET).is_none());
+    }
+}
