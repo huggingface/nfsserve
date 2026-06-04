@@ -32,7 +32,6 @@ pub fn generate_host_ip(hostnum: u16) -> String {
 /// processes an established socket
 async fn process_socket(mut socket: tokio::net::TcpStream, context: RPCContext) -> Result<(), anyhow::Error> {
     let (mut message_handler, mut socksend, mut msgrecvchan) = SocketMessageHandler::new(&context);
-    let _ = socket.set_nodelay(true);
 
     tokio::spawn(async move {
         loop {
@@ -207,6 +206,9 @@ impl<T: NFSFileSystem + Send + Sync + 'static> NFSTcp for NFSTcpListener<T> {
             };
             info!("Accepting connection from {}", context.client_addr);
             debug!("Accepting socket {:?} {:?}", socket, context);
+            // `set_nodelay` is `TcpStream`-specific, so it lives here in the
+            // listener rather than in `process_socket`.
+            let _ = socket.set_nodelay(true);
             tokio::spawn(async move {
                 let _ = process_socket(socket, context).await;
             });
