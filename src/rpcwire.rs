@@ -105,7 +105,7 @@ async fn read_fragment(socket: &mut DuplexStream, append_to: &mut Vec<u8>) -> Re
     Ok(is_last)
 }
 
-pub async fn write_fragment(socket: &mut tokio::net::TcpStream, buf: &[u8]) -> Result<(), anyhow::Error> {
+pub async fn write_fragment<W: tokio::io::AsyncWrite + Unpin>(socket: &mut W, buf: &[u8]) -> Result<(), anyhow::Error> {
     // TODO: split into many fragments
     assert!(buf.len() < (1 << 31));
     // set the last flag
