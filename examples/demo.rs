@@ -275,19 +275,23 @@ impl NFSFileSystem for DemoFS {
             };
             let mut start_index = 0;
             if start_after > 0 {
-                if let Some(pos) = dir.iter().position(|&r| r == start_after) {
-                    start_index = pos + 1;
-                } else {
+                // The cookie is a one-based position, so it is also the index of the
+                // next entry to serve.
+                start_index = start_after as usize;
+                if start_index > dir.len() {
                     return Err(nfsstat3::NFS3ERR_BAD_COOKIE);
                 }
             }
             let remaining_length = dir.len() - start_index;
 
-            for i in dir[start_index..].iter() {
+            for (offset, i) in dir[start_index..].iter().enumerate() {
                 ret.entries.push(DirEntry {
                     fileid: *i,
                     name: fs[(*i) as usize].name.clone(),
                     attr: fs[(*i) as usize].attr,
+                    // Position in the listing, one-based so zero stays reserved for
+                    // "start at the beginning".
+                    cookie: (start_index + offset + 1) as u64,
                 });
                 if ret.entries.len() >= max_entries {
                     break;

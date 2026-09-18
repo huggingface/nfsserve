@@ -686,15 +686,26 @@ pub async fn nfsproc3_fsstat(
         Ok(v) => nfs::post_op_attr::attributes(v),
         Err(_) => nfs::post_op_attr::Void,
     };
+
+    let stat = match context.vfs.fsstat(id).await {
+        Ok(stat) => stat,
+        Err(stat) => {
+            make_success_reply(xid).serialize(output)?;
+            stat.serialize(output)?;
+            obj_attr.serialize(output)?;
+            return Ok(());
+        },
+    };
+
     let res = FSSTAT3resok {
         obj_attributes: obj_attr,
-        tbytes: 1024 * 1024 * 1024 * 1024,
-        fbytes: 1024 * 1024 * 1024 * 1024,
-        abytes: 1024 * 1024 * 1024 * 1024,
-        tfiles: 1024 * 1024 * 1024,
-        ffiles: 1024 * 1024 * 1024,
-        afiles: 1024 * 1024 * 1024,
-        invarsec: u32::MAX,
+        tbytes: stat.total_bytes,
+        fbytes: stat.free_bytes,
+        abytes: stat.available_bytes,
+        tfiles: stat.total_files,
+        ffiles: stat.free_files,
+        afiles: stat.available_files,
+        invarsec: stat.invar_sec,
     };
     make_success_reply(xid).serialize(output)?;
     nfs::nfsstat3::NFS3_OK.serialize(output)?;
@@ -893,7 +904,7 @@ pub async fn nfsproc3_readdirplus(
                 let entry = entryplus3 {
                     fileid: entry.fileid,
                     name: entry.name,
-                    cookie: entry.fileid,
+                    cookie: entry.cookie,
                     name_attributes: nfs::post_op_attr::attributes(obj_attr),
                     name_handle: handle,
                 };
@@ -1014,7 +1025,7 @@ pub async fn nfsproc3_readdir(
                 let entry = entry3 {
                     fileid: entry.fileid,
                     name: entry.name,
-                    cookie: entry.fileid,
+                    cookie: entry.cookie,
                 };
                 // write the entry into a buffer first
                 let mut write_buf: Vec<u8> = Vec::new();
