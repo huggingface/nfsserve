@@ -394,7 +394,7 @@ impl NFSFileSystem for MirrorFS {
         debug!("path: {:?}", path);
         debug!("children len: {:?}", children.len());
         debug!("remaining_len : {:?}", remaining_length);
-        for i in children.range((range_start, Bound::Unbounded)) {
+        for (offset, i) in children.range((range_start, Bound::Unbounded)).enumerate() {
             let fileid = *i;
             let fileent = fsmap.find_entry(fileid)?;
             let name = fsmap.sym_to_fname(&fileent.name).await;
@@ -403,7 +403,12 @@ impl NFSFileSystem for MirrorFS {
                 fileid,
                 name: name.as_bytes().into(),
                 attr: fileent.fsmeta,
+                // This example paginates by fileid, so keeping the fileid as the
+                // cookie preserves its existing behaviour; `offset` is available if
+                // a positional cookie is preferred.
+                cookie: fileid,
             });
+            let _ = offset;
             if ret.entries.len() >= max_entries {
                 break;
             }

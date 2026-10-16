@@ -10,6 +10,8 @@ use crate::nfs::*;
 pub struct DirEntrySimple {
     pub fileid: fileid3,
     pub name: filename3,
+    /// Pagination cookie; see [`DirEntry::cookie`].
+    pub cookie: u64,
 }
 #[derive(Default, Debug)]
 pub struct ReadDirSimpleResult {
@@ -22,6 +24,21 @@ pub struct DirEntry {
     pub fileid: fileid3,
     pub name: filename3,
     pub attr: fattr3,
+    /// Pagination cookie for this entry, echoed back by the client in the next
+    /// `readdir` as `start_after`.
+    ///
+    /// This used to be the `fileid`, which cannot work in general: a fileid is not
+    /// unique within a directory. Hard links share one, and so do `.` and `..` in a
+    /// file system's root. When the server truncates a reply to its byte budget the
+    /// client resumes from the last entry it actually received, so an ambiguous
+    /// cookie either rewinds the listing or skips the entries in between — silently,
+    /// with eof set. RFC 1813 §3.3.16 makes the cookie server-opaque precisely so an
+    /// implementation can use a position instead of an identity.
+    ///
+    /// Set it to anything that uniquely identifies the entry's position in the
+    /// listing; an index is the obvious choice. Zero is reserved: the client sends
+    /// cookie 0 to mean "start at the beginning".
+    pub cookie: u64,
 }
 #[derive(Default, Debug)]
 pub struct ReadDirResult {
@@ -37,6 +54,7 @@ impl ReadDirSimpleResult {
             .map(|e| DirEntrySimple {
                 fileid: e.fileid,
                 name: e.name.clone(),
+                cookie: e.cookie,
             })
             .collect();
         ReadDirSimpleResult {
@@ -62,6 +80,50 @@ fn get_generation_number() -> u64 {
 pub enum VFSCapabilities {
     ReadOnly,
     ReadWrite,
+}
+
+/// Dynamic file system statistics, as reported by the NFS `FSSTAT` procedure.
+///
+/// These are the numbers a client shows for `df`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FsStat {
+    /// Total size of the file system, in bytes.
+    pub total_bytes: u64,
+    /// Free space, in bytes.
+    pub free_bytes: u64,
+    /// Free space available to the user the request is made on behalf of, in bytes. For a read-only
+    /// file system this is normally zero.
+    pub available_bytes: u64,
+    /// Total number of file slots.
+    pub total_files: u64,
+    /// Number of free file slots.
+    pub free_files: u64,
+    /// Number of free file slots available to the user the request is made on behalf of.
+    pub available_files: u64,
+    /// Number of seconds for which the file system is not expected to change, per RFC 1813
+    /// §3.3.18: zero for a volatile file system, and "for an immutable file system, such as a
+    /// CD-ROM, this would be the largest unsigned integer" — so `u32::MAX` advertises that the
+    /// file system does not change, which is what a read-only export wants.
+    pub invar_sec: u32,
+}
+
+impl Default for FsStat {
+    /// The placeholder values the server reported before [`NFSFileSystem::fsstat`] existed: 1 TiB
+    /// of space and 1 Gi file slots, all of it free, and an `invar_sec` claiming the file system
+    /// never changes.
+    fn default() -> Self {
+        const TIB: u64 = 1024 * 1024 * 1024 * 1024;
+        const GI: u64 = 1024 * 1024 * 1024;
+        Self {
+            total_bytes: TIB,
+            free_bytes: TIB,
+            available_bytes: TIB,
+            total_files: GI,
+            free_files: GI,
+            available_files: GI,
+            invar_sec: u32::MAX,
+        }
+    }
 }
 
 /// The basic API to implement to provide an NFS file system
@@ -192,6 +254,18 @@ pub trait NFSFileSystem: Sync {
     /// Reads a symlink
     async fn readlink(&self, id: fileid3) -> Result<nfspath3, nfsstat3>;
 
+    /// Get dynamic file system statistics: how much space and how many file slots the file system
+    /// has, and how much of that is free. This is what a client reports for `df`.
+    ///
+    /// The default implementation returns [`FsStat::default`], which is a placeholder claiming 1
+    /// TiB of entirely free space. Override it to report the real numbers for the backing store;
+    /// otherwise clients will show a wrong capacity, and a read-only file system will appear to
+    /// have room to write into.
+    async fn fsstat(&self, root_fileid: fileid3) -> Result<FsStat, nfsstat3> {
+        let _ = root_fileid;
+        Ok(FsStat::default())
+    }
+
     /// Get static file system Information
     async fn fsinfo(&self, root_fileid: fileid3) -> Result<fsinfo3, nfsstat3> {
         let dir_attr: nfs::post_op_attr = match self.getattr(root_fileid).await {
@@ -257,5 +331,24 @@ pub trait NFSFileSystem: Sync {
     fn serverid(&self) -> cookieverf3 {
         let gennum = get_generation_number();
         gennum.to_le_bytes()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The default must keep reporting exactly what the server hardcoded before `fsstat` became
+    /// overridable, so that existing implementations of [`NFSFileSystem`] see no behaviour change.
+    #[test]
+    fn fsstat_default_matches_previous_hardcoded_values() {
+        let stat = FsStat::default();
+        assert_eq!(stat.total_bytes, 1024 * 1024 * 1024 * 1024);
+        assert_eq!(stat.free_bytes, 1024 * 1024 * 1024 * 1024);
+        assert_eq!(stat.available_bytes, 1024 * 1024 * 1024 * 1024);
+        assert_eq!(stat.total_files, 1024 * 1024 * 1024);
+        assert_eq!(stat.free_files, 1024 * 1024 * 1024);
+        assert_eq!(stat.available_files, 1024 * 1024 * 1024);
+        assert_eq!(stat.invar_sec, u32::MAX);
     }
 }
