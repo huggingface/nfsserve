@@ -996,7 +996,7 @@ pub async fn nfsproc3_readdir(
     // This is hard to ballpark, so we just divide it by 16
     let estimated_max_results = args.dircount / 16;
     let mut ctr = 0;
-    match context.vfs.readdir_simple(dirid, estimated_max_results as usize).await {
+    match context.vfs.readdir(dirid, args.cookie, estimated_max_results as usize).await {
         Ok(result) => {
             // we count dir_count seperately as it is just a subset of fields
             let mut accumulated_dircount: usize = 0;
