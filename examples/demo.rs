@@ -324,7 +324,7 @@ impl NFSFileSystem for DemoFS {
     }
 
     #[allow(unused)]
-    async fn mkdir(&self, _dirid: fileid3, _dirname: &filename3) -> Result<(fileid3, fattr3), nfsstat3> {
+    async fn mkdir(&self, _dirid: fileid3, _dirname: &filename3, _attr: &sattr3) -> Result<(fileid3, fattr3), nfsstat3> {
         Err(nfsstat3::NFS3ERR_ROFS)
     }
 

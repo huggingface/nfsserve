@@ -65,8 +65,7 @@ TODO and Seeking Contributors
  - More things in Mount Protocol and NFS Protocol has to be implemented.
  There are a bunch of messages that reply as "Unavailable". For instance, 
  we implement `READDIR_PLUS` but not `READDIR` which is usually fine, except
- that Windows insists on always trying READDIR first. 
- Link creation is also not supported.
+ that Windows insists on always trying READDIR first.
  - The RPC message handling in `nfs_handlers.rs` leaves a lot to be desired.
  The response serialization is very manual. Some cleanup will be good.
  - Windows mount "kinda" works (only on Windows 11 Pro with the NFS server),

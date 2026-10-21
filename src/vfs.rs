@@ -136,10 +136,10 @@ pub trait NFSFileSystem: Sync {
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
     async fn create_exclusive(&self, dirid: fileid3, filename: &filename3) -> Result<fileid3, nfsstat3>;
 
-    /// Makes a directory with the following attributes.
+    /// Makes a directory with the given attributes (typically its mode).
     /// If not supported dur to readonly file system
     /// this should return Err(nfsstat3::NFS3ERR_ROFS)
-    async fn mkdir(&self, dirid: fileid3, dirname: &filename3) -> Result<(fileid3, fattr3), nfsstat3>;
+    async fn mkdir(&self, dirid: fileid3, dirname: &filename3, attr: &sattr3) -> Result<(fileid3, fattr3), nfsstat3>;
 
     /// Removes a file.
     /// If not supported due to readonly file system
@@ -156,6 +156,18 @@ pub trait NFSFileSystem: Sync {
         to_dirid: fileid3,
         to_filename: &filename3,
     ) -> Result<(), nfsstat3>;
+
+    /// Creates a hard link named `linkname` in directory `dirid` that refers
+    /// to the existing file `fileid`. Afterwards getattr(fileid) should
+    /// report the incremented `nlink`.
+    ///
+    /// The default implementation returns Err(nfsstat3::NFS3ERR_NOTSUPP).
+    /// Implementations that support hard links should also set
+    /// nfs::FSF_LINK in the properties returned by fsinfo.
+    async fn link(&self, fileid: fileid3, dirid: fileid3, linkname: &filename3) -> Result<(), nfsstat3> {
+        let _ = (fileid, dirid, linkname);
+        Err(nfsstat3::NFS3ERR_NOTSUPP)
+    }
 
     /// Returns the contents of a directory with pagination.
     /// Directory listing should be deterministic.

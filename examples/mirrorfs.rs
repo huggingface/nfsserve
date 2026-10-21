@@ -574,7 +574,7 @@ impl NFSFileSystem for MirrorFS {
 
         Ok(())
     }
-    async fn mkdir(&self, dirid: fileid3, dirname: &filename3) -> Result<(fileid3, fattr3), nfsstat3> {
+    async fn mkdir(&self, dirid: fileid3, dirname: &filename3, _attr: &sattr3) -> Result<(fileid3, fattr3), nfsstat3> {
         self.create_fs_object(dirid, dirname, &CreateFSObject::Directory).await
     }
 

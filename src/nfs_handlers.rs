@@ -149,12 +149,12 @@ pub async fn handle_nfs(
         NFSProgram::NFSPROC3_MKDIR => nfsproc3_mkdir(xid, input, output, context).await?,
         NFSProgram::NFSPROC3_SYMLINK => nfsproc3_symlink(xid, input, output, context).await?,
         NFSProgram::NFSPROC3_READLINK => nfsproc3_readlink(xid, input, output, context).await?,
+        NFSProgram::NFSPROC3_LINK => nfsproc3_link(xid, input, output, context).await?,
         _ => {
             warn!("Unimplemented message {:?}", prog);
             proc_unavail_reply_message(xid).serialize(output)?;
         }, /*
            NFSPROC3_MKNOD,
-           NFSPROC3_LINK,
            NFSPROC3_COMMIT,
            INVALID*/
     }
@@ -1793,6 +1793,151 @@ pub async fn nfsproc3_rename(
 }
 
 /*
+      LINK3res NFSPROC3_LINK(LINK3args) = 15;
+
+      struct LINK3args {
+           nfs_fh3          file;
+           diropargs3       link;
+      };
+
+      struct LINK3resok {
+           post_op_attr   file_attributes;
+           wcc_data       linkdir_wcc;
+      };
+
+      struct LINK3resfail {
+           post_op_attr   file_attributes;
+           wcc_data       linkdir_wcc;
+      };
+
+      union LINK3res switch (nfsstat3 status) {
+      case NFS3_OK:
+           LINK3resok    resok;
+      default:
+           LINK3resfail  resfail;
+      };
+*/
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+struct LINK3args {
+    file: nfs::nfs_fh3,
+    link: nfs::diropargs3,
+}
+xdr_struct!(LINK3args, file, link);
+
+pub async fn nfsproc3_link(
+    xid: u32,
+    input: &mut impl Read,
+    output: &mut impl Write,
+    context: &RPCContext,
+) -> Result<(), anyhow::Error> {
+    // if we do not have write capabilities
+    if !matches!(context.vfs.capabilities(), VFSCapabilities::ReadWrite) {
+        warn!("No write capabilities.");
+        make_success_reply(xid).serialize(output)?;
+        nfs::nfsstat3::NFS3ERR_ROFS.serialize(output)?;
+        nfs::post_op_attr::Void.serialize(output)?;
+        nfs::wcc_data::default().serialize(output)?;
+        return Ok(());
+    }
+    let mut args = LINK3args::default();
+    args.deserialize(input)?;
+
+    debug!("nfsproc3_link({:?}, {:?}) ", xid, args);
+
+    let ids = context
+        .vfs
+        .fh_to_id(&args.file)
+        .and_then(|fileid| Ok((fileid, context.vfs.fh_to_id(&args.link.dir)?)));
+    let (fileid, dirid) = match ids {
+        Ok(v) => v,
+        Err(stat) => {
+            error!("Invalid file handle");
+            make_success_reply(xid).serialize(output)?;
+            stat.serialize(output)?;
+            nfs::post_op_attr::Void.serialize(output)?;
+            nfs::wcc_data::default().serialize(output)?;
+            return Ok(());
+        },
+    };
+
+    // hard links to directories would create cycles in the tree
+    match context.vfs.getattr(fileid).await {
+        Ok(v) if matches!(v.ftype, nfs::ftype3::NF3DIR) => {
+            make_success_reply(xid).serialize(output)?;
+            nfs::nfsstat3::NFS3ERR_ISDIR.serialize(output)?;
+            nfs::post_op_attr::attributes(v).serialize(output)?;
+            nfs::wcc_data::default().serialize(output)?;
+            return Ok(());
+        },
+        Ok(_) => {},
+        Err(stat) => {
+            error!("Cannot stat file");
+            make_success_reply(xid).serialize(output)?;
+            stat.serialize(output)?;
+            nfs::post_op_attr::Void.serialize(output)?;
+            nfs::wcc_data::default().serialize(output)?;
+            return Ok(());
+        },
+    }
+
+    // get the directory attributes before the link
+    let pre_dir_attr = match context.vfs.getattr(dirid).await {
+        Ok(v) => {
+            let wccattr = nfs::wcc_attr {
+                size: v.size,
+                mtime: v.mtime,
+                ctime: v.ctime,
+            };
+            nfs::pre_op_attr::attributes(wccattr)
+        },
+        Err(stat) => {
+            error!("Cannot stat directory");
+            make_success_reply(xid).serialize(output)?;
+            stat.serialize(output)?;
+            nfs::post_op_attr::Void.serialize(output)?;
+            nfs::wcc_data::default().serialize(output)?;
+            return Ok(());
+        },
+    };
+
+    let res = context.vfs.link(fileid, dirid, &args.link.name).await;
+
+    // Re-read file and dir attributes for post op attr
+    let file_attr = match context.vfs.getattr(fileid).await {
+        Ok(v) => nfs::post_op_attr::attributes(v),
+        Err(_) => nfs::post_op_attr::Void,
+    };
+    let post_dir_attr = match context.vfs.getattr(dirid).await {
+        Ok(v) => nfs::post_op_attr::attributes(v),
+        Err(_) => nfs::post_op_attr::Void,
+    };
+    let wcc_res = nfs::wcc_data {
+        before: pre_dir_attr,
+        after: post_dir_attr,
+    };
+
+    let stat = match res {
+        Ok(()) => {
+            debug!("link success");
+            nfs::nfsstat3::NFS3_OK
+        },
+        Err(e) => {
+            debug!("link error {:?} --> {:?}", xid, e);
+            e
+        },
+    };
+    // LINK3resok and LINK3resfail have the same layout
+    make_success_reply(xid).serialize(output)?;
+    stat.serialize(output)?;
+    file_attr.serialize(output)?;
+    wcc_res.serialize(output)?;
+
+    Ok(())
+}
+
+/*
      MKDIR3res NFSPROC3_MKDIR(MKDIR3args) = 9;
 
      struct MKDIR3args {
@@ -1879,7 +2024,7 @@ pub async fn nfsproc3_mkdir(
         },
     };
 
-    let res = context.vfs.mkdir(dirid, &args.dirops.name).await;
+    let res = context.vfs.mkdir(dirid, &args.dirops.name, &args.attributes).await;
 
     // Re-read dir attributes for post op attr
     let post_dir_attr = match context.vfs.getattr(dirid).await {
@@ -2112,4 +2257,260 @@ pub async fn nfsproc3_readlink(
         },
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::io::Cursor;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    use async_trait::async_trait;
+
+    use super::*;
+    use crate::nfs::{fattr3, fileid3, filename3, ftype3, nfspath3, nfsstat3, sattr3};
+    use crate::transaction_tracker::TransactionTracker;
+    use crate::vfs::{NFSFileSystem, ReadDirResult};
+
+    const ROOT: fileid3 = 1;
+    const FILE: fileid3 = 2;
+    const SUBDIR: fileid3 = 3;
+
+    /// A flat file system: the root directory holds "file" and "subdir".
+    /// Only lookup, getattr and link do anything.
+    struct LinkFS {
+        writable: bool,
+        attrs: Mutex<HashMap<fileid3, fattr3>>,
+        entries: Mutex<HashMap<(fileid3, Vec<u8>), fileid3>>,
+    }
+
+    impl LinkFS {
+        fn new(writable: bool) -> LinkFS {
+            let attr = |fileid, ftype| fattr3 {
+                ftype,
+                nlink: 1,
+                fileid,
+                ..Default::default()
+            };
+            LinkFS {
+                writable,
+                attrs: Mutex::new(HashMap::from([
+                    (ROOT, attr(ROOT, ftype3::NF3DIR)),
+                    (FILE, attr(FILE, ftype3::NF3REG)),
+                    (SUBDIR, attr(SUBDIR, ftype3::NF3DIR)),
+                ])),
+                entries: Mutex::new(HashMap::from([
+                    ((ROOT, b"file".to_vec()), FILE),
+                    ((ROOT, b"subdir".to_vec()), SUBDIR),
+                ])),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl NFSFileSystem for LinkFS {
+        fn capabilities(&self) -> VFSCapabilities {
+            if self.writable {
+                VFSCapabilities::ReadWrite
+            } else {
+                VFSCapabilities::ReadOnly
+            }
+        }
+        fn root_dir(&self) -> fileid3 {
+            ROOT
+        }
+        async fn lookup(&self, dirid: fileid3, filename: &filename3) -> Result<fileid3, nfsstat3> {
+            let entries = self.entries.lock().unwrap();
+            entries
+                .get(&(dirid, filename.0.clone()))
+                .copied()
+                .ok_or(nfsstat3::NFS3ERR_NOENT)
+        }
+        async fn getattr(&self, id: fileid3) -> Result<fattr3, nfsstat3> {
+            self.attrs.lock().unwrap().get(&id).copied().ok_or(nfsstat3::NFS3ERR_STALE)
+        }
+        async fn link(&self, fileid: fileid3, dirid: fileid3, linkname: &filename3) -> Result<(), nfsstat3> {
+            let mut attrs = self.attrs.lock().unwrap();
+            let mut entries = self.entries.lock().unwrap();
+            if !matches!(attrs[&dirid].ftype, ftype3::NF3DIR) {
+                return Err(nfsstat3::NFS3ERR_NOTDIR);
+            }
+            let key = (dirid, linkname.0.clone());
+            if entries.contains_key(&key) {
+                return Err(nfsstat3::NFS3ERR_EXIST);
+            }
+            entries.insert(key, fileid);
+            attrs.get_mut(&fileid).unwrap().nlink += 1;
+            attrs.get_mut(&dirid).unwrap().size += 1;
+            Ok(())
+        }
+        async fn setattr(&self, _id: fileid3, _setattr: sattr3) -> Result<fattr3, nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+        async fn read(&self, _id: fileid3, _offset: u64, _count: u32) -> Result<(Vec<u8>, bool), nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+        async fn write(&self, _id: fileid3, _offset: u64, _data: &[u8]) -> Result<fattr3, nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+        async fn create(
+            &self,
+            _dirid: fileid3,
+            _filename: &filename3,
+            _attr: sattr3,
+        ) -> Result<(fileid3, fattr3), nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+        async fn create_exclusive(&self, _dirid: fileid3, _filename: &filename3) -> Result<fileid3, nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+        async fn mkdir(&self, _dirid: fileid3, _dirname: &filename3, _attr: &sattr3) -> Result<(fileid3, fattr3), nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+        async fn remove(&self, _dirid: fileid3, _filename: &filename3) -> Result<(), nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+        async fn rename(
+            &self,
+            _from_dirid: fileid3,
+            _from_filename: &filename3,
+            _to_dirid: fileid3,
+            _to_filename: &filename3,
+        ) -> Result<(), nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+        async fn readdir(
+            &self,
+            _dirid: fileid3,
+            _start_after: fileid3,
+            _max_entries: usize,
+        ) -> Result<ReadDirResult, nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+        async fn symlink(
+            &self,
+            _dirid: fileid3,
+            _linkname: &filename3,
+            _symlink: &nfspath3,
+            _attr: &sattr3,
+        ) -> Result<(fileid3, fattr3), nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+        async fn readlink(&self, _id: fileid3) -> Result<nfspath3, nfsstat3> {
+            Err(nfsstat3::NFS3ERR_NOTSUPP)
+        }
+    }
+
+    fn context(vfs: Arc<LinkFS>) -> RPCContext {
+        RPCContext {
+            local_port: 0,
+            client_addr: String::new(),
+            auth: Default::default(),
+            vfs,
+            mount_signal: None,
+            export_name: Arc::new("/".to_string()),
+            transaction_tracker: Arc::new(TransactionTracker::new(Duration::from_secs(60))),
+        }
+    }
+
+    /// The decoded body of a LINK3res. resok and resfail share one layout.
+    struct LinkReply {
+        status: nfsstat3,
+        file_attributes: nfs::post_op_attr,
+        linkdir_wcc: nfs::wcc_data,
+    }
+
+    /// Sends a LINK call to the handler and decodes the reply,
+    /// checking that the whole reply was consumed.
+    async fn call_link(vfs: &Arc<LinkFS>, file: nfs::nfs_fh3, dir: fileid3, name: &str) -> LinkReply {
+        let args = LINK3args {
+            file,
+            link: nfs::diropargs3 {
+                dir: vfs.id_to_fh(dir),
+                name: name.as_bytes().into(),
+            },
+        };
+        let mut input = Vec::new();
+        args.serialize(&mut input).unwrap();
+        let mut output = Vec::new();
+        nfsproc3_link(7, &mut Cursor::new(input), &mut output, &context(vfs.clone()))
+            .await
+            .unwrap();
+
+        let mut reply = Cursor::new(output);
+        let mut msg = rpc_msg::default();
+        msg.deserialize(&mut reply).unwrap();
+        assert_eq!(msg.xid, 7);
+        let mut ret = LinkReply {
+            status: nfsstat3::NFS3_OK,
+            file_attributes: Default::default(),
+            linkdir_wcc: Default::default(),
+        };
+        ret.status.deserialize(&mut reply).unwrap();
+        ret.file_attributes.deserialize(&mut reply).unwrap();
+        ret.linkdir_wcc.deserialize(&mut reply).unwrap();
+        assert_eq!(reply.position() as usize, reply.get_ref().len());
+        ret
+    }
+
+    #[tokio::test]
+    async fn link_creates_second_name() {
+        let vfs = Arc::new(LinkFS::new(true));
+        let reply = call_link(&vfs, vfs.id_to_fh(FILE), SUBDIR, "other").await;
+
+        assert!(matches!(reply.status, nfsstat3::NFS3_OK));
+        match reply.file_attributes {
+            nfs::post_op_attr::attributes(a) => assert_eq!(a.nlink, 2),
+            nfs::post_op_attr::Void => panic!("missing file attributes"),
+        }
+        match (reply.linkdir_wcc.before, reply.linkdir_wcc.after) {
+            (nfs::pre_op_attr::attributes(before), nfs::post_op_attr::attributes(after)) => {
+                assert_eq!(before.size, 0);
+                assert_eq!(after.size, 1);
+            },
+            _ => panic!("missing directory wcc data"),
+        }
+        assert!(matches!(vfs.lookup(SUBDIR, &b"other".as_slice().into()).await, Ok(FILE)));
+    }
+
+    #[tokio::test]
+    async fn link_to_existing_name_fails() {
+        let vfs = Arc::new(LinkFS::new(true));
+        let reply = call_link(&vfs, vfs.id_to_fh(FILE), ROOT, "subdir").await;
+
+        assert!(matches!(reply.status, nfsstat3::NFS3ERR_EXIST));
+        // resfail still carries the file attributes, unchanged
+        match reply.file_attributes {
+            nfs::post_op_attr::attributes(a) => assert_eq!(a.nlink, 1),
+            nfs::post_op_attr::Void => panic!("missing file attributes"),
+        }
+    }
+
+    #[tokio::test]
+    async fn link_to_directory_is_refused() {
+        let vfs = Arc::new(LinkFS::new(true));
+        let reply = call_link(&vfs, vfs.id_to_fh(SUBDIR), ROOT, "loop").await;
+
+        assert!(matches!(reply.status, nfsstat3::NFS3ERR_ISDIR));
+        assert!(matches!(vfs.lookup(ROOT, &b"loop".as_slice().into()).await, Err(nfsstat3::NFS3ERR_NOENT)));
+    }
+
+    #[tokio::test]
+    async fn link_with_bad_handle_fails() {
+        let vfs = Arc::new(LinkFS::new(true));
+        let reply = call_link(&vfs, nfs::nfs_fh3 { data: vec![1, 2, 3] }, ROOT, "x").await;
+
+        assert!(matches!(reply.status, nfsstat3::NFS3ERR_BADHANDLE));
+        assert!(matches!(reply.file_attributes, nfs::post_op_attr::Void));
+    }
+
+    #[tokio::test]
+    async fn link_on_readonly_fs_fails() {
+        let vfs = Arc::new(LinkFS::new(false));
+        let reply = call_link(&vfs, vfs.id_to_fh(FILE), ROOT, "other").await;
+
+        assert!(matches!(reply.status, nfsstat3::NFS3ERR_ROFS));
+        assert!(matches!(reply.file_attributes, nfs::post_op_attr::Void));
+    }
 }
