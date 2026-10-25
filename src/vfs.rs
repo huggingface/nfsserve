@@ -189,6 +189,15 @@ pub trait NFSFileSystem: Sync {
         attr: &sattr3,
     ) -> Result<(fileid3, fattr3), nfsstat3>;
 
+    /// Makes a hard link named linkname in dirid to the existing object fileid.
+    /// The default implementation reports that hard links are not supported.
+    /// If not supported due to readonly file system
+    /// this should return Err(nfsstat3::NFS3ERR_ROFS)
+    async fn link(&self, fileid: fileid3, dirid: fileid3, linkname: &filename3) -> Result<(), nfsstat3> {
+        let _ = (fileid, dirid, linkname);
+        Err(nfsstat3::NFS3ERR_NOTSUPP)
+    }
+
     /// Reads a symlink
     async fn readlink(&self, id: fileid3) -> Result<nfspath3, nfsstat3>;
 
