@@ -173,9 +173,15 @@ pub trait NFSFileSystem: Sync {
     ) -> Result<ReadDirResult, nfsstat3>;
 
     /// Simple version of readdir.
-    /// Only need to return filename and id
-    async fn readdir_simple(&self, dirid: fileid3, count: usize) -> Result<ReadDirSimpleResult, nfsstat3> {
-        Ok(ReadDirSimpleResult::from_readdir_result(&self.readdir(dirid, 0, count).await?))
+    /// Only need to return filename and id.
+    /// Like readdir, returns the entries after start_after (0: from the start).
+    async fn readdir_simple(
+        &self,
+        dirid: fileid3,
+        start_after: fileid3,
+        count: usize,
+    ) -> Result<ReadDirSimpleResult, nfsstat3> {
+        Ok(ReadDirSimpleResult::from_readdir_result(&self.readdir(dirid, start_after, count).await?))
     }
 
     /// Makes a symlink with the following attributes.
