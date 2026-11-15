@@ -693,7 +693,7 @@ pub async fn nfsproc3_fsstat(
             stat.serialize(output)?;
             obj_attr.serialize(output)?;
             return Ok(());
-        }
+        },
     };
     let res = FSSTAT3resok {
         obj_attributes: obj_attr,
