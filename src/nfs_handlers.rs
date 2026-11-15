@@ -686,15 +686,24 @@ pub async fn nfsproc3_fsstat(
         Ok(v) => nfs::post_op_attr::attributes(v),
         Err(_) => nfs::post_op_attr::Void,
     };
+    let st = match context.vfs.fsstat(id).await {
+        Ok(st) => st,
+        Err(stat) => {
+            make_success_reply(xid).serialize(output)?;
+            stat.serialize(output)?;
+            obj_attr.serialize(output)?;
+            return Ok(());
+        }
+    };
     let res = FSSTAT3resok {
         obj_attributes: obj_attr,
-        tbytes: 1024 * 1024 * 1024 * 1024,
-        fbytes: 1024 * 1024 * 1024 * 1024,
-        abytes: 1024 * 1024 * 1024 * 1024,
-        tfiles: 1024 * 1024 * 1024,
-        ffiles: 1024 * 1024 * 1024,
-        afiles: 1024 * 1024 * 1024,
-        invarsec: u32::MAX,
+        tbytes: st.tbytes,
+        fbytes: st.fbytes,
+        abytes: st.abytes,
+        tfiles: st.tfiles,
+        ffiles: st.ffiles,
+        afiles: st.afiles,
+        invarsec: st.invarsec,
     };
     make_success_reply(xid).serialize(output)?;
     nfs::nfsstat3::NFS3_OK.serialize(output)?;

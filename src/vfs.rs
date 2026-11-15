@@ -58,6 +58,21 @@ fn get_generation_number() -> u64 {
     }
 }
 
+/// What FSSTAT reports, without the attributes (RFC 1813, section 3.3.18).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FsStat {
+    /// Bytes in total, free, and free to the caller.
+    pub tbytes: u64,
+    pub fbytes: u64,
+    pub abytes: u64,
+    /// Files (inodes) in total, free, and free to the caller.
+    pub tfiles: u64,
+    pub ffiles: u64,
+    pub afiles: u64,
+    /// Seconds for which the answer is not expected to change.
+    pub invarsec: u32,
+}
+
 /// What capabilities are supported
 pub enum VFSCapabilities {
     ReadOnly,
@@ -216,6 +231,21 @@ pub trait NFSFileSystem: Sync {
             properties: nfs::FSF_SYMLINK | nfs::FSF_HOMOGENEOUS | nfs::FSF_CANSETTIME,
         };
         Ok(res)
+    }
+
+    /// Dynamic file system information (FSSTAT): sizes and file counts. Optional.
+    /// The default reports 1 TiB of space and 1 Gi files, all free.
+    async fn fsstat(&self, root_fileid: fileid3) -> Result<FsStat, nfsstat3> {
+        let _ = root_fileid;
+        Ok(FsStat {
+            tbytes: 1024 * 1024 * 1024 * 1024,
+            fbytes: 1024 * 1024 * 1024 * 1024,
+            abytes: 1024 * 1024 * 1024 * 1024,
+            tfiles: 1024 * 1024 * 1024,
+            ffiles: 1024 * 1024 * 1024,
+            afiles: 1024 * 1024 * 1024,
+            invarsec: u32::MAX,
+        })
     }
 
     /// Converts the fileid to an opaque NFS file handle. Optional.
